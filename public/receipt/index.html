@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <title>レシート照会</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="robots" content="noindex,nofollow" />
+  <style>
+    :root{
+      --bg:#f5f6f8;
+      --panel:#ffffff;
+      --fg:#111827;
+      --muted:#6b7280;
+      --border:#e5e7eb;
+      --accent:#2563eb;
+      --danger:#dc2626;
+      --shadow: 0 8px 24px rgba(0,0,0,.08);
+      --radius:14px;
+    }
+    *{ box-sizing:border-box; }
+    html,body{ margin:0; padding:0; color:var(--fg); background:var(--bg); font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans JP", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif; }
+    .wrap{ max-width:720px; margin:0 auto; padding:14px; }
+    .card{
+      background: var(--panel);
+      border:1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+    }
+    .h{
+      padding:12px 14px;
+      border-bottom:1px solid var(--border);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+    }
+    .h h1{ margin:0; font-size:16px; font-weight:800; }
+    .b{ padding:14px; }
+    .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; }
+    .field{ flex:1; min-width:220px; display:flex; flex-direction:column; gap:6px; }
+    .label{ font-size:12px; color:var(--muted); }
+    input{
+      width:100%;
+      padding:12px 12px;
+      border-radius:12px;
+      border:1px solid var(--border);
+      background:#fff;
+      outline:none;
+    }
+    input:focus{ border-color: rgba(37,99,235,.5); box-shadow: 0 0 0 4px rgba(37,99,235,.12); }
+    .btn{
+      border:1px solid var(--border);
+      background:#fff;
+      padding:12px 12px;
+      border-radius:12px;
+      cursor:pointer;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      min-height:44px;
+      user-select:none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .btn.primary{
+      background: var(--accent);
+      color:#fff;
+      border-color: rgba(0,0,0,0);
+    }
+    .notice{
+      border-radius:12px;
+      padding:10px 12px;
+      border:1px solid var(--border);
+      background:#fafafa;
+      font-size:13px;
+      color:var(--muted);
+      margin-top:12px;
+    }
+    .notice.err{
+      border-color: rgba(220,38,38,.25);
+      background: rgba(220,38,38,.08);
+      color: #7f1d1d;
+    }
+    pre{
+      margin:12px 0 0;
+      padding:14px;
+      border-radius:12px;
+      border:1px solid var(--border);
+      background:#fff;
+      overflow:auto;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size:13px;
+      line-height:1.35;
+      white-space:pre;
+    }
+    @media (max-width:520px){
+      .field{ min-width:100%; }
+      .btn{ width:100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <div class="h">
+        <h1>レシート照会</h1>
+      </div>
+      <div class="b">
+        <div class="row">
+          <div class="field">
+            <div class="label">購入日（必須）</div>
+            <input id="date" type="date" />
+          </div>
+          <div class="field">
+            <div class="label">レシート番号（必須）</div>
+            <input id="receiptNo" type="text" autocomplete="off" placeholder="決済レシート番号を入力" />
+          </div>
+          <button class="btn primary" id="btnSearch" type="button">検索</button>
+        </div>
+
+        <div id="notice" class="notice">日付とレシート番号を入力して検索してください。</div>
+        <pre id="out" hidden></pre>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API = {
+      receipt: (date, receiptNo) => `/api/receipt?date=${encodeURIComponent(date)}&receipt_no=${encodeURIComponent(receiptNo)}`
+    };
+
+    const elDate = document.getElementById("date");
+    const elReceipt = document.getElementById("receiptNo");
+    const elBtn = document.getElementById("btnSearch");
+    const elNotice = document.getElementById("notice");
+    const elOut = document.getElementById("out");
+
+    function setNotice(type, text){
+      elNotice.className = "notice" + (type ? ` ${type}` : "");
+      elNotice.textContent = text;
+    }
+
+    function money(n){ return (n ?? 0).toLocaleString("ja-JP"); }
+
+    async function search(){
+      const date = (elDate.value || "").trim();
+      const receiptNo = (elReceipt.value || "").trim();
+      if (!date || !receiptNo){
+        setNotice("err", "日付とレシート番号は必須です。");
+        elOut.hidden = true;
+        return;
+      }
+      try{
+        setNotice("", "検索中...");
+        elOut.hidden = true;
+
+        const res = await fetch(API.receipt(date, receiptNo), { headers:{ "Accept":"application/json" } });
+        const text = await res.text().catch(()=> "");
+        let data = null;
+        try{ data = text ? JSON.parse(text) : null; } catch(e) {}
+        if (!res.ok){
+          const msg = (data && data.error) ? data.error : (text || `HTTP ${res.status}`);
+          throw new Error(msg);
+        }
+
+        const r = data.receipt;
+        const lines = [];
+
+        lines.push("------------------------------");
+        lines.push("  レシート（参照用）");
+        lines.push(`  購入日: ${r.registered_at_jst} (JST)`);
+        lines.push(`  レシート番号: ${r.receipt_no}`);
+        lines.push("------------------------------");
+
+        for (const it of r.items){
+          const name = String(it.product_name || "");
+          const qty = Number(it.qty || 0);
+          const amount = Number(it.line_amount_excl || 0);
+          lines.push(`${name}  x${qty}  ${money(amount)}`);
+        }
+
+        lines.push("------------------------------");
+
+        for (const s of r.tax_summary){
+          const rate = Number(s.tax_rate);
+          if (!s.subtotal_excl && !s.tax_amount && !s.subtotal_incl) continue;
+          lines.push(`[${rate}%対象]`);
+          lines.push(` 税抜小計                ${money(s.subtotal_excl)}`);
+          lines.push(` 税額（切上げ）           ${money(s.tax_amount)}`);
+          lines.push(` 小計                    ${money(s.subtotal_incl)}`);
+          lines.push("");
+        }
+
+        lines.push("------------------------------");
+        lines.push(`合計（税込）              ${money(r.total_incl)}`);
+        lines.push("------------------------------");
+
+        elOut.textContent = lines.join("\n");
+        elOut.hidden = false;
+        setNotice("", "見つかりました。");
+      } catch(e){
+        setNotice("err", `見つかりません / エラー: ${e && e.message ? e.message : "unknown"}`);
+        elOut.hidden = true;
+      }
+    }
+
+    elBtn.addEventListener("click", search);
+    elReceipt.addEventListener("keydown", (e) => { if (e.key === "Enter") search(); });
+
+    // default date = today (local). For Japan-based use, it's OK.
+    // If you need strict JST even on non-JST devices, this can be adjusted.
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth()+1).padStart(2,"0");
+    const dd = String(d.getDate()).padStart(2,"0");
+    elDate.value = `${y}-${m}-${dd}`;
+  </script>
+</body>
+</html>

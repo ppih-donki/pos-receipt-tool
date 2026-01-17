@@ -1,0 +1,1121 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <title>簡易レジ（小計）</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="robots" content="noindex,nofollow" />
+  <style>
+    :root{
+      --bg:#f5f6f8;
+      --panel:#ffffff;
+      --fg:#111827;
+      --muted:#6b7280;
+      --border:#e5e7eb;
+      --accent:#2563eb;
+      --danger:#dc2626;
+      --warn:#b45309;
+      --ok:#059669;
+      --shadow: 0 8px 24px rgba(0,0,0,.08);
+      --radius:14px;
+    }
+    *{ box-sizing:border-box; }
+    html,body{ margin:0; padding:0; color:var(--fg); background:var(--bg); font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans JP", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif; }
+    button, input, select{ font:inherit; }
+    .wrap{ max-width:1100px; margin:0 auto; padding:14px; }
+    .header{
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      background: rgba(245,246,248,.9);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border);
+    }
+    .header-inner{
+      max-width:1100px;
+      margin:0 auto;
+      padding:10px 14px;
+      display:flex;
+      gap:12px;
+      align-items:center;
+      justify-content:space-between;
+    }
+    .title{
+      display:flex;
+      flex-direction:column;
+      gap:2px;
+      min-width: 200px;
+    }
+    .title h1{
+      font-size:16px;
+      line-height:1.2;
+      margin:0;
+      font-weight:700;
+    }
+    .meta{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+    }
+    .pill{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      border:1px solid var(--border);
+      background: var(--panel);
+      border-radius:999px;
+      padding:8px 10px;
+      font-size:12px;
+      box-shadow: 0 1px 0 rgba(0,0,0,.02);
+      white-space:nowrap;
+    }
+    .dot{ width:10px; height:10px; border-radius:50%; background: var(--muted); display:inline-block; }
+    .dot.ok{ background: var(--ok); }
+    .dot.ng{ background: var(--danger); }
+
+    .grid{
+      display:grid;
+      grid-template-columns: 1fr 360px;
+      gap:14px;
+      margin-top:14px;
+    }
+    .card{
+      background: var(--panel);
+      border:1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+    }
+    .card-h{
+      padding:12px 14px;
+      border-bottom:1px solid var(--border);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+    }
+    .card-h h2{
+      margin:0;
+      font-size:14px;
+      font-weight:700;
+    }
+    .card-b{
+      padding:14px;
+    }
+
+    .row{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex-wrap:wrap;
+    }
+    .field{
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+      flex:1;
+      min-width: 220px;
+    }
+    .label{
+      font-size:12px;
+      color:var(--muted);
+    }
+    select, input[type="text"], input[type="number"], input[type="date"]{
+      width:100%;
+      padding:12px 12px;
+      border-radius:12px;
+      border:1px solid var(--border);
+      background:#fff;
+      outline:none;
+    }
+    input:focus, select:focus{ border-color: rgba(37,99,235,.5); box-shadow: 0 0 0 4px rgba(37,99,235,.12); }
+
+    .btn{
+      border:1px solid var(--border);
+      background:#fff;
+      padding:12px 12px;
+      border-radius:12px;
+      cursor:pointer;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap:8px;
+      min-height:44px;
+      user-select:none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .btn:hover{ border-color:#d1d5db; }
+    .btn:active{ transform: translateY(1px); }
+    .btn.primary{
+      background: var(--accent);
+      color:#fff;
+      border-color: rgba(0,0,0,0);
+    }
+    .btn.primary:hover{ filter:brightness(.98); }
+    .btn.danger{
+      background: var(--danger);
+      color:#fff;
+      border-color: rgba(0,0,0,0);
+    }
+    .btn.ghost{
+      background: transparent;
+    }
+    .btn.small{
+      padding:10px 10px;
+      min-height:40px;
+      border-radius:10px;
+      font-size:13px;
+    }
+    .btn.icon{
+      width:44px;
+      padding:0;
+    }
+    .btn[disabled]{
+      opacity:.5;
+      cursor:not-allowed;
+      transform:none;
+    }
+
+    .notice{
+      border-radius:12px;
+      padding:10px 12px;
+      border:1px solid var(--border);
+      background:#fafafa;
+      font-size:13px;
+      color:var(--muted);
+    }
+    .notice.err{
+      border-color: rgba(220,38,38,.25);
+      background: rgba(220,38,38,.08);
+      color: #7f1d1d;
+    }
+    .notice.warn{
+      border-color: rgba(180,83,9,.25);
+      background: rgba(180,83,9,.10);
+      color: #7c2d12;
+    }
+    .notice.ok{
+      border-color: rgba(5,150,105,.25);
+      background: rgba(5,150,105,.10);
+      color: #064e3b;
+    }
+
+    .table-wrap{ overflow:auto; }
+    table{
+      width:100%;
+      border-collapse:separate;
+      border-spacing:0;
+      min-width: 680px;
+    }
+    th, td{
+      padding:10px 10px;
+      border-bottom:1px solid var(--border);
+      vertical-align:middle;
+      font-size:13px;
+    }
+    th{
+      text-align:left;
+      color:var(--muted);
+      font-weight:600;
+      background:#fafafa;
+      position:sticky;
+      top:0;
+      z-index:1;
+    }
+    tr:last-child td{ border-bottom:none; }
+    .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+    .right{ text-align:right; }
+    .muted{ color:var(--muted); }
+
+    .qty{
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:8px;
+      min-width: 170px;
+    }
+    .qty input{
+      width: 72px;
+      text-align:center;
+      padding:10px 8px;
+      border-radius:10px;
+    }
+
+    .summary{
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+    .sum-block{
+      border:1px solid var(--border);
+      border-radius:12px;
+      padding:10px 12px;
+      background:#fff;
+    }
+    .sum-title{
+      font-weight:700;
+      font-size:13px;
+      margin-bottom:8px;
+    }
+    .sum-row{
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      padding:4px 0;
+      font-size:13px;
+    }
+    .sum-row strong{ font-size:14px; }
+    .divider{
+      height:1px;
+      background: var(--border);
+      margin:8px 0;
+    }
+
+    .sticky-actions{
+      position: sticky;
+      bottom: 0;
+      background: rgba(255,255,255,.85);
+      backdrop-filter: blur(10px);
+      border-top:1px solid var(--border);
+      padding:10px 14px;
+      display:flex;
+      gap:10px;
+      align-items:center;
+      justify-content:space-between;
+    }
+    .sticky-actions .left, .sticky-actions .right{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex-wrap:wrap;
+    }
+
+    @media (max-width: 980px){
+      .grid{ grid-template-columns: 1fr; }
+      table{ min-width: 760px; }
+    }
+    @media (max-width: 520px){
+      .header-inner{ flex-direction:column; align-items:flex-start; }
+      .meta{ justify-content:flex-start; }
+      .field{ min-width: 100%; }
+      .sticky-actions{ flex-direction:column; align-items:stretch; }
+      .sticky-actions .left, .sticky-actions .right{ width:100%; justify-content:space-between; }
+      .btn{ width:100%; }
+      .btn.icon{ width:44px; }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="header">
+    <div class="header-inner">
+      <div class="title">
+        <h1>簡易レジ（小計）</h1>
+        <div class="muted" style="font-size:12px;">JST: <span id="nowJst" class="mono">----</span></div>
+      </div>
+      <div class="meta">
+        <div class="pill" title="ネットワーク状態">
+          <span id="netDot" class="dot"></span>
+          <span id="netText">--</span>
+        </div>
+        <div class="pill" title="小計状態">
+          <span id="calcState" class="muted">小計未実行</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div class="grid">
+      <div class="card">
+        <div class="card-h">
+          <h2>スキャン・明細</h2>
+          <button class="btn ghost small" id="btnClear" type="button">会計をクリア</button>
+        </div>
+
+        <div class="card-b">
+          <div class="row" style="margin-bottom:12px;">
+            <div class="field" style="max-width:360px;">
+              <div class="label">レジ担当者（必須）</div>
+              <select id="cashierName">
+                <option value="">読み込み中...</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <div class="label">バーコード入力（スキャナのEnterで追加）</div>
+              <input id="scanInput" type="text" inputmode="numeric" autocomplete="off" placeholder="バーコードをスキャンしてください（数字1〜13桁）" />
+            </div>
+
+            <div style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
+              <button class="btn small" type="button" id="btnAddManual">手入力で追加</button>
+              <button class="btn small" type="button" id="btnFocus">入力欄にフォーカス</button>
+            </div>
+          </div>
+
+          <div id="noticeArea" class="notice" style="margin-bottom:12px;">
+            初期化中...
+          </div>
+
+          <div class="row" style="margin-bottom:10px;">
+            <div class="notice" style="flex:1;">
+              最後に追加：<span id="lastAdded" class="muted">---</span>
+            </div>
+          </div>
+
+          <div class="table-wrap card" style="box-shadow:none; border-radius:12px; border:1px solid var(--border);">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:42%;">商品</th>
+                  <th style="width:8%;">税率</th>
+                  <th class="right" style="width:12%;">税抜単価</th>
+                  <th style="width:20%; text-align:center;">数量</th>
+                  <th class="right" style="width:12%;">税抜金額</th>
+                  <th style="width:6%; text-align:center;">削除</th>
+                </tr>
+              </thead>
+              <tbody id="itemsTbody"></tbody>
+            </table>
+          </div>
+
+          <div style="margin-top:12px;" class="notice warn" id="staleNotice" hidden>
+            明細が更新されました。小計は未更新です（小計ボタンを押してください）。
+          </div>
+        </div>
+
+        <div class="sticky-actions">
+          <div class="left">
+            <button class="btn primary" id="btnSubtotal" type="button">小計（税率別）</button>
+          </div>
+          <div class="right">
+            <span class="muted" style="font-size:12px;">※税額は「税率別税抜小計」×税率 を1円未満切り上げ</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-h">
+          <h2>小計・登録</h2>
+        </div>
+
+        <div class="card-b">
+          <div class="summary" style="margin-bottom:14px;">
+            <div class="sum-block">
+              <div class="sum-title">10% 対象</div>
+              <div class="sum-row"><span class="muted">税抜小計</span><span class="mono" id="excl10">0</span></div>
+              <div class="sum-row"><span class="muted">税額（切上げ）</span><span class="mono" id="tax10">0</span></div>
+              <div class="divider"></div>
+              <div class="sum-row"><strong>税込小計</strong><strong class="mono" id="incl10">0</strong></div>
+            </div>
+
+            <div class="sum-block">
+              <div class="sum-title">8% 対象</div>
+              <div class="sum-row"><span class="muted">税抜小計</span><span class="mono" id="excl8">0</span></div>
+              <div class="sum-row"><span class="muted">税額（切上げ）</span><span class="mono" id="tax8">0</span></div>
+              <div class="divider"></div>
+              <div class="sum-row"><strong>税込小計</strong><strong class="mono" id="incl8">0</strong></div>
+            </div>
+
+            <div class="sum-block" style="border-color: rgba(37,99,235,.25); background: rgba(37,99,235,.06);">
+              <div class="sum-row"><strong>合計（税込）</strong><strong class="mono" id="totalIncl">0</strong></div>
+            </div>
+          </div>
+
+          <div class="field" style="margin-bottom:10px;">
+            <div class="label">レシート番号（必須）</div>
+            <input id="receiptNo" type="text" autocomplete="off" placeholder="決済レシート番号を入力" />
+          </div>
+
+          <div class="notice" style="margin-bottom:10px;">
+            transaction_id：<span class="mono" id="txId">----</span>
+          </div>
+
+          <div class="row" style="margin-bottom:10px;">
+            <button class="btn primary" id="btnRegister" type="button" style="flex:1;">登録</button>
+            <button class="btn" id="btnDownloadCsv" type="button" style="flex:1;" hidden>CSVをダウンロード</button>
+          </div>
+
+          <div class="notice" id="regNotice">
+            登録に成功すると、明細がクリアされ次の会計に進みます。送信失敗時はCSVダウンロードが表示されます。
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // =========================
+    // Config
+    // =========================
+    const API = {
+      cashiers: "/api/cashiers",
+      productByCode: (code) => `/api/products?code=${encodeURIComponent(code)}`,
+      register: "/api/transactions",
+    };
+
+    // =========================
+    // State
+    // =========================
+    const state = {
+      itemsByCode: new Map(), // product_code => item
+      lastAddedText: "---",
+      subtotal: {
+        excl8: 0, tax8: 0, incl8: 0,
+        excl10: 0, tax10: 0, incl10: 0,
+        totalIncl: 0
+      },
+      subtotalFresh: false,
+    };
+
+    // =========================
+    // Elements
+    // =========================
+    const elNowJst = document.getElementById("nowJst");
+    const elNetDot = document.getElementById("netDot");
+    const elNetText = document.getElementById("netText");
+    const elCalcState = document.getElementById("calcState");
+
+    const elCashierName = document.getElementById("cashierName");
+    const elScanInput = document.getElementById("scanInput");
+    const elBtnAddManual = document.getElementById("btnAddManual");
+    const elBtnFocus = document.getElementById("btnFocus");
+    const elNoticeArea = document.getElementById("noticeArea");
+    const elLastAdded = document.getElementById("lastAdded");
+    const elItemsTbody = document.getElementById("itemsTbody");
+    const elStaleNotice = document.getElementById("staleNotice");
+
+    const elExcl10 = document.getElementById("excl10");
+    const elTax10 = document.getElementById("tax10");
+    const elIncl10 = document.getElementById("incl10");
+    const elExcl8 = document.getElementById("excl8");
+    const elTax8 = document.getElementById("tax8");
+    const elIncl8 = document.getElementById("incl8");
+    const elTotalIncl = document.getElementById("totalIncl");
+
+    const elReceiptNo = document.getElementById("receiptNo");
+    const elTxId = document.getElementById("txId");
+    const elBtnSubtotal = document.getElementById("btnSubtotal");
+    const elBtnRegister = document.getElementById("btnRegister");
+    const elBtnClear = document.getElementById("btnClear");
+    const elBtnDownloadCsv = document.getElementById("btnDownloadCsv");
+    const elRegNotice = document.getElementById("regNotice");
+
+    // =========================
+    // JST utils (local timezoneに依存せず +09:00 固定)
+    // =========================
+    function pad2(n){ return String(n).padStart(2,"0"); }
+    function getNowJstDate(){
+      const now = new Date();
+      const utcMs = now.getTime() + (now.getTimezoneOffset() * 60000);
+      const jstMs = utcMs + (9 * 60 * 60000);
+      return new Date(jstMs);
+    }
+    function formatJstDateTime(dt){
+      const y = dt.getUTCFullYear();
+      const m = pad2(dt.getUTCMonth() + 1);
+      const d = pad2(dt.getUTCDate());
+      const hh = pad2(dt.getUTCHours());
+      const mm = pad2(dt.getUTCMinutes());
+      const ss = pad2(dt.getUTCSeconds());
+      return `${y}-${m}-${d} ${hh}:${mm}:${ss}`;
+    }
+    function yyyymmddFromRegisteredAtJst(registeredAtJst){
+      // "YYYY-MM-DD HH:mm:ss" -> "YYYYMMDD"
+      return registeredAtJst.slice(0,4) + registeredAtJst.slice(5,7) + registeredAtJst.slice(8,10);
+    }
+
+    // =========================
+    // UI helpers
+    // =========================
+    function setNotice(type, text){
+      elNoticeArea.className = "notice" + (type ? ` ${type}` : "");
+      elNoticeArea.textContent = text;
+    }
+    function setRegNotice(type, text){
+      elRegNotice.className = "notice" + (type ? ` ${type}` : "");
+      elRegNotice.textContent = text;
+    }
+    function money(n){ return (n ?? 0).toLocaleString("ja-JP"); }
+    function escapeHtml(s){
+      return String(s).replace(/[&<>"']/g, (c) => ({
+        "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+      }[c]));
+    }
+
+    function markSubtotalStale(){
+      state.subtotalFresh = false;
+      elStaleNotice.hidden = false;
+      elCalcState.textContent = "小計未更新";
+    }
+
+    function markSubtotalFresh(){
+      state.subtotalFresh = true;
+      elStaleNotice.hidden = true;
+      elCalcState.textContent = "小計OK";
+    }
+
+    function updateNetworkBadge(){
+      const online = navigator.onLine;
+      elNetDot.classList.toggle("ok", online);
+      elNetDot.classList.toggle("ng", !online);
+      elNetText.textContent = online ? "オンライン" : "オフライン";
+    }
+
+    function sanitizeReceiptForTx(receiptNo){
+      return String(receiptNo || "").trim().replace(/[^A-Za-z0-9_-]/g, "_");
+    }
+
+    function updateTxIdPreview(){
+      const r = sanitizeReceiptForTx(elReceiptNo.value);
+      if (!r) {
+        elTxId.textContent = "----";
+        return;
+      }
+      const registeredAtJst = formatJstDateTime(getNowJstDate());
+      const ymd = yyyymmddFromRegisteredAtJst(registeredAtJst);
+      elTxId.textContent = `${ymd}_${r}`;
+    }
+
+    // =========================
+    // API helpers
+    // =========================
+    async function apiGetJson(url){
+      const res = await fetch(url, { method:"GET", headers:{ "Accept":"application/json" } });
+      if (!res.ok){
+        const t = await res.text().catch(()=> "");
+        throw new Error(`GET ${url} failed: ${res.status} ${t}`);
+      }
+      return await res.json();
+    }
+
+    async function apiPostJson(url, body){
+      const res = await fetch(url, {
+        method:"POST",
+        headers:{ "Content-Type":"application/json", "Accept":"application/json" },
+        body: JSON.stringify(body)
+      });
+      const dataText = await res.text().catch(()=> "");
+      let data = null;
+      try { data = dataText ? JSON.parse(dataText) : null; } catch(e) {}
+      if (!res.ok){
+        const msg = (data && data.error) ? data.error : dataText || `HTTP ${res.status}`;
+        const err = new Error(msg);
+        err.status = res.status;
+        err.data = data;
+        throw err;
+      }
+      return data;
+    }
+
+    // =========================
+    // Cashiers
+    // =========================
+    async function loadCashiers(){
+      try{
+        const data = await apiGetJson(API.cashiers);
+        const names = (data.cashiers || []).map(x => x.cashier_name).filter(Boolean);
+        if (names.length === 0){
+          elCashierName.innerHTML = `<option value="">（従業員が未登録）</option>`;
+          setNotice("warn", "従業員マスタが空です。先に従業員を登録してください。");
+          return;
+        }
+        elCashierName.innerHTML = `<option value="">選択してください</option>` + names.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join("");
+        setNotice("", "準備完了。バーコードをスキャンしてください。");
+      } catch(e){
+        elCashierName.innerHTML = `<option value="">（読込失敗）</option>`;
+        setNotice("err", "従業員マスタの読み込みに失敗しました。API/DB設定を確認してください。");
+      }
+    }
+
+    // =========================
+    // Product lookup
+    // =========================
+    async function fetchProductByCode(code){
+      const data = await apiGetJson(API.productByCode(code));
+      return data.product || null;
+    }
+
+    // =========================
+    // Items
+    // =========================
+    function upsertItem(product){
+      const code = product.product_code;
+      const existing = state.itemsByCode.get(code);
+
+      if (existing){
+        existing.qty += 1;
+        existing.line_amount_excl = existing.price_excl * existing.qty;
+        state.lastAddedText = `${existing.product_name}（数量 ${existing.qty}）`;
+      } else {
+        const qty = 1;
+        const it = {
+          product_code: product.product_code,
+          product_category: product.product_category || "",
+          product_name: product.product_name,
+          pos_cost: product.pos_cost == null ? null : (Number(product.pos_cost) | 0),
+          price_excl: (Number(product.price_excl) | 0),
+          tax_rate: Number(product.tax_rate) === 8 ? 8 : 10,
+          qty: qty,
+          line_amount_excl: (Number(product.price_excl) | 0) * qty,
+        };
+        state.itemsByCode.set(code, it);
+        state.lastAddedText = `${it.product_name}（数量 1）`;
+      }
+
+      elLastAdded.textContent = state.lastAddedText;
+      renderItems();
+      markSubtotalStale();
+    }
+
+    function setQty(code, qty){
+      const it = state.itemsByCode.get(code);
+      if (!it) return;
+      const q = Math.max(1, qty | 0);
+      it.qty = q;
+      it.line_amount_excl = it.price_excl * it.qty;
+
+      state.lastAddedText = `${it.product_name}（数量 ${it.qty}）`;
+      elLastAdded.textContent = state.lastAddedText;
+      renderItems();
+      markSubtotalStale();
+    }
+
+    function incQty(code){ setQty(code, (state.itemsByCode.get(code)?.qty || 1) + 1); }
+    function decQty(code){ setQty(code, (state.itemsByCode.get(code)?.qty || 1) - 1); }
+
+    function removeItem(code){
+      const it = state.itemsByCode.get(code);
+      if (!it) return;
+      state.itemsByCode.delete(code);
+      state.lastAddedText = `${it.product_name} を削除`;
+      elLastAdded.textContent = state.lastAddedText;
+      renderItems();
+      markSubtotalStale();
+    }
+
+    function renderItems(){
+      const items = Array.from(state.itemsByCode.values());
+
+      if (items.length === 0){
+        elItemsTbody.innerHTML = `
+          <tr>
+            <td colspan="6" class="muted" style="padding:14px;">
+              まだ商品がありません。バーコードをスキャンしてください。
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      elItemsTbody.innerHTML = items.map(it => {
+        const taxLabel = it.tax_rate === 8 ? "8%" : "10%";
+        const sub = it.product_category ? ` <span class="muted">/ ${escapeHtml(it.product_category)}</span>` : "";
+        return `
+          <tr data-code="${escapeHtml(it.product_code)}">
+            <td>
+              <div style="display:flex; flex-direction:column; gap:2px;">
+                <div style="font-weight:700;">${escapeHtml(it.product_name)}${sub}</div>
+                <div class="muted mono" style="font-size:12px;">${escapeHtml(it.product_code)}</div>
+              </div>
+            </td>
+            <td class="mono">${taxLabel}</td>
+            <td class="right mono">${money(it.price_excl)}</td>
+            <td>
+              <div class="qty">
+                <button class="btn small icon" type="button" data-act="dec" title="数量を減らす">−</button>
+                <input class="mono" type="number" min="1" step="1" inputmode="numeric" data-act="qty" value="${it.qty}">
+                <button class="btn small icon" type="button" data-act="inc" title="数量を増やす">＋</button>
+              </div>
+            </td>
+            <td class="right mono">${money(it.line_amount_excl)}</td>
+            <td style="text-align:center;">
+              <button class="btn small danger" type="button" data-act="del" title="削除">🗑</button>
+            </td>
+          </tr>
+        `;
+      }).join("");
+
+      elItemsTbody.querySelectorAll("tr").forEach(tr => {
+        const code = tr.getAttribute("data-code");
+
+        tr.querySelector('[data-act="inc"]').addEventListener("click", () => { incQty(code); keepFocus(); });
+        tr.querySelector('[data-act="dec"]').addEventListener("click", () => { decQty(code); keepFocus(); });
+        tr.querySelector('[data-act="del"]').addEventListener("click", () => { removeItem(code); keepFocus(); });
+
+        const qtyInput = tr.querySelector('[data-act="qty"]');
+        qtyInput.addEventListener("change", () => {
+          const v = Number(qtyInput.value);
+          setQty(code, Number.isFinite(v) ? v : 1);
+          keepFocus();
+        });
+        qtyInput.addEventListener("focus", () => {
+          try{ qtyInput.select(); }catch(e){}
+        });
+      });
+    }
+
+    // =========================
+    // Subtotal
+    // 税額: 税率別税抜小計 × 税率 を1円未満切り上げ
+    // =========================
+    function calcTaxCeil(subtotalExcl, taxRate){
+      return Math.ceil((subtotalExcl * taxRate) / 100);
+    }
+
+    function runSubtotal(){
+      const items = Array.from(state.itemsByCode.values());
+      if (items.length === 0){
+        setNotice("warn", "商品がありません。スキャンしてください。");
+        return;
+      }
+
+      const excl8 = items.filter(i => i.tax_rate === 8).reduce((a,b)=>a+b.line_amount_excl, 0);
+      const excl10 = items.filter(i => i.tax_rate === 10).reduce((a,b)=>a+b.line_amount_excl, 0);
+
+      const tax8 = calcTaxCeil(excl8, 8);
+      const tax10 = calcTaxCeil(excl10, 10);
+
+      const incl8 = excl8 + tax8;
+      const incl10 = excl10 + tax10;
+      const totalIncl = incl8 + incl10;
+
+      state.subtotal = { excl8, tax8, incl8, excl10, tax10, incl10, totalIncl };
+
+      elExcl8.textContent = money(excl8);
+      elTax8.textContent = money(tax8);
+      elIncl8.textContent = money(incl8);
+      elExcl10.textContent = money(excl10);
+      elTax10.textContent = money(tax10);
+      elIncl10.textContent = money(incl10);
+      elTotalIncl.textContent = money(totalIncl);
+
+      markSubtotalFresh();
+      setNotice("ok", "小計を更新しました。内容が正しければ決済端末で会計し、レシート番号を入力して登録してください。");
+    }
+
+    // =========================
+    // CSV (offline or failure)
+    // =========================
+    function csvEscape(v){
+      const s = String(v ?? "");
+      if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g,'""')}"`;
+      return s;
+    }
+
+    function buildCsvText(registeredAtJst, receiptNo, transactionId, cashierName){
+      const items = Array.from(state.itemsByCode.values());
+      const s = state.subtotalFresh ? state.subtotal : calcSubtotalSnapshotForCsv(items);
+
+      const header = [
+        "registered_at_jst",
+        "receipt_no",
+        "transaction_id",
+        "cashier_name",
+        "record_type",
+        "product_code",
+        "product_category",
+        "product_name",
+        "pos_cost",
+        "price_excl",
+        "qty",
+        "line_amount_excl",
+        "tax_rate",
+        "taxable_amount_excl",
+        "tax_amount",
+        "taxable_amount_incl"
+      ];
+
+      const rows = [];
+      rows.push(header);
+
+      for (const it of items){
+        rows.push([
+          registeredAtJst, receiptNo, transactionId, cashierName,
+          "ITEM",
+          it.product_code, it.product_category, it.product_name,
+          it.pos_cost == null ? "" : String(it.pos_cost),
+          String(it.price_excl),
+          String(it.qty),
+          String(it.line_amount_excl),
+          String(it.tax_rate),
+          "", "", ""
+        ]);
+      }
+
+      if (s.excl10 > 0 || s.tax10 > 0 || s.incl10 > 0){
+        rows.push([
+          registeredAtJst, receiptNo, transactionId, cashierName,
+          "TAX_SUMMARY",
+          "", "", "", "", "", "", "",
+          "10",
+          String(s.excl10),
+          String(s.tax10),
+          String(s.incl10)
+        ]);
+      }
+      if (s.excl8 > 0 || s.tax8 > 0 || s.incl8 > 0){
+        rows.push([
+          registeredAtJst, receiptNo, transactionId, cashierName,
+          "TAX_SUMMARY",
+          "", "", "", "", "", "", "",
+          "8",
+          String(s.excl8),
+          String(s.tax8),
+          String(s.incl8)
+        ]);
+      }
+
+      return rows.map(cols => cols.map(csvEscape).join(",")).join("\n");
+    }
+
+    function calcSubtotalSnapshotForCsv(items){
+      const excl8 = items.filter(i => i.tax_rate === 8).reduce((a,b)=>a+b.line_amount_excl, 0);
+      const excl10 = items.filter(i => i.tax_rate === 10).reduce((a,b)=>a+b.line_amount_excl, 0);
+      const tax8 = calcTaxCeil(excl8, 8);
+      const tax10 = calcTaxCeil(excl10, 10);
+      const incl8 = excl8 + tax8;
+      const incl10 = excl10 + tax10;
+      const totalIncl = incl8 + incl10;
+      return { excl8, tax8, incl8, excl10, tax10, incl10, totalIncl };
+    }
+
+    function downloadCsv(filename, text){
+      const blob = new Blob([text], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    // =========================
+    // Register
+    // =========================
+    async function registerTransaction(){
+      const cashierName = (elCashierName.value || "").trim();
+      if (!cashierName){
+        setRegNotice("warn", "レジ担当者を選択してください。");
+        return;
+      }
+
+      const items = Array.from(state.itemsByCode.values());
+      if (items.length === 0){
+        setRegNotice("warn", "商品がありません。スキャンしてください。");
+        return;
+      }
+
+      const receiptNo = (elReceiptNo.value || "").trim();
+      if (!receiptNo){
+        setRegNotice("warn", "レシート番号が未入力です。入力してください。");
+        elReceiptNo.focus();
+        return;
+      }
+
+      if (!state.subtotalFresh){
+        runSubtotal();
+      }
+
+      const registeredAtJst = formatJstDateTime(getNowJstDate());
+      const ymd = yyyymmddFromRegisteredAtJst(registeredAtJst);
+      const txId = `${ymd}_${sanitizeReceiptForTx(receiptNo)}`;
+
+      const payload = {
+        receipt_no: receiptNo,
+        registered_at_jst: registeredAtJst,
+        cashier_name: cashierName,
+        items: items.map(it => ({
+          product_code: it.product_code,
+          product_category: it.product_category,
+          product_name: it.product_name,
+          pos_cost: it.pos_cost,
+          price_excl: it.price_excl,
+          tax_rate: it.tax_rate,
+          qty: it.qty
+        }))
+      };
+
+      // Offline -> CSV
+      if (!navigator.onLine){
+        const csv = buildCsvText(registeredAtJst, receiptNo, txId, cashierName);
+        showCsvFallback(txId, csv);
+        setRegNotice("err", "送信できません（オフライン）。CSVをダウンロードして保管してください。");
+        return;
+      }
+
+      try{
+        elBtnRegister.disabled = true;
+        elBtnRegister.textContent = "登録中...";
+        elBtnDownloadCsv.hidden = true;
+
+        const res = await apiPostJson(API.register, payload);
+
+        setRegNotice("ok", `登録しました：${res.transaction_id}`);
+        resetAll(true);
+        keepFocus();
+      } catch(e){
+        const msg = e && e.message ? e.message : "登録に失敗しました";
+        const csv = buildCsvText(registeredAtJst, receiptNo, txId, cashierName);
+        showCsvFallback(txId, csv);
+        setRegNotice("err", `登録に失敗しました。CSVをダウンロードしてください。エラー：${msg}`);
+      } finally {
+        elBtnRegister.disabled = false;
+        elBtnRegister.textContent = "登録";
+      }
+    }
+
+    function showCsvFallback(txId, csvText){
+      elBtnDownloadCsv.hidden = false;
+      elBtnDownloadCsv.onclick = () => downloadCsv(`${txId}.csv`, csvText);
+    }
+
+    // =========================
+    // Scan handling
+    // =========================
+    function normalizeScanCode(raw){
+      const s = String(raw || "").trim().replace(/[^\d]/g, "");
+      return s;
+    }
+
+    async function handleScanCommit(raw){
+      const cashierName = (elCashierName.value || "").trim();
+      if (!cashierName){
+        setNotice("warn", "先にレジ担当者を選択してください。");
+        return;
+      }
+
+      const code = normalizeScanCode(raw);
+      if (!code){
+        setNotice("", "バーコードをスキャンしてください。");
+        return;
+      }
+      if (!/^\d{1,13}$/.test(code)){
+        setNotice("err", "商品コードは数字1〜13桁のみ対応です。");
+        return;
+      }
+
+      try{
+        setNotice("", "参照中...");
+        const product = await fetchProductByCode(code);
+        if (!product){
+          setNotice("err", `商品マスタにありません：${code}`);
+          return;
+        }
+        upsertItem(product);
+        setNotice("ok", `追加：${product.product_name}（${product.tax_rate}%）`);
+      } catch(e){
+        setNotice("err", "商品参照に失敗しました。通信状態/API設定を確認してください。");
+      }
+    }
+
+    function keepFocus(){
+      try{
+        elScanInput.focus();
+        elScanInput.select();
+      }catch(e){}
+    }
+
+    // =========================
+    // Reset
+    // =========================
+    function resetAll(keepCashier){
+      state.itemsByCode.clear();
+      state.lastAddedText = "---";
+      elLastAdded.textContent = state.lastAddedText;
+
+      state.subtotal = { excl8:0, tax8:0, incl8:0, excl10:0, tax10:0, incl10:0, totalIncl:0 };
+      state.subtotalFresh = false;
+
+      elExcl8.textContent = "0";
+      elTax8.textContent = "0";
+      elIncl8.textContent = "0";
+      elExcl10.textContent = "0";
+      elTax10.textContent = "0";
+      elIncl10.textContent = "0";
+      elTotalIncl.textContent = "0";
+
+      elReceiptNo.value = "";
+      updateTxIdPreview();
+
+      elBtnDownloadCsv.hidden = true;
+      setRegNotice("", "登録に成功すると、明細がクリアされ次の会計に進みます。送信失敗時はCSVダウンロードが表示されます。");
+
+      elStaleNotice.hidden = true;
+      elCalcState.textContent = "小計未実行";
+
+      renderItems();
+
+      if (!keepCashier){
+        elCashierName.value = "";
+      }
+    }
+
+    // =========================
+    // Bind events
+    // =========================
+    elScanInput.addEventListener("keydown", async (e) => {
+      if (e.key === "Enter"){
+        e.preventDefault();
+        const v = elScanInput.value;
+        elScanInput.value = "";
+        await handleScanCommit(v);
+        keepFocus();
+      }
+    });
+
+    elBtnAddManual.addEventListener("click", async () => {
+      const v = prompt("商品コードを入力（数字1〜13桁）");
+      if (v == null) return;
+      await handleScanCommit(v);
+      keepFocus();
+    });
+
+    elBtnFocus.addEventListener("click", () => keepFocus());
+
+    elBtnSubtotal.addEventListener("click", () => {
+      runSubtotal();
+      keepFocus();
+    });
+
+    elBtnRegister.addEventListener("click", async () => {
+      await registerTransaction();
+      keepFocus();
+    });
+
+    elBtnClear.addEventListener("click", () => {
+      const ok = confirm("この会計の内容をすべてクリアします。よろしいですか？");
+      if (!ok) return;
+      resetAll(true);
+      keepFocus();
+    });
+
+    elReceiptNo.addEventListener("input", () => updateTxIdPreview());
+    elCashierName.addEventListener("change", () => keepFocus());
+
+    window.addEventListener("online", () => { updateNetworkBadge(); });
+    window.addEventListener("offline", () => { updateNetworkBadge(); });
+
+    function tick(){
+      const j = getNowJstDate();
+      elNowJst.textContent = formatJstDateTime(j);
+      updateTxIdPreview();
+    }
+
+    // =========================
+    // Init
+    // =========================
+    updateNetworkBadge();
+    tick();
+    setInterval(tick, 1000);
+
+    resetAll(true);
+    setNotice("", "初期化中...");
+    loadCashiers().finally(() => setTimeout(() => keepFocus(), 200));
+  </script>
+</body>
+</html>

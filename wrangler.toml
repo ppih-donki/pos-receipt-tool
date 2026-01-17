@@ -1,0 +1,8 @@
+name = "pos-receipt-tool"
+compatibility_date = "2025-12-01"
+
+# ローカル開発・migrations用（本番PagesではDashboard側のD1 bindingでもOK）
+[[d1_databases]]
+binding = "DB"
+database_name = "pos_receipts_db"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
