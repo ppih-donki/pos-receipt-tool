@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS transactions (
   transaction_id TEXT PRIMARY KEY,
   yyyymmdd TEXT NOT NULL,
   receipt_no TEXT NOT NULL,
+  registered_at_utc TEXT NOT NULL,
   registered_at_jst TEXT NOT NULL,
   cashier_name TEXT NOT NULL,
 
