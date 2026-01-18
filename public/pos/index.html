@@ -1176,7 +1176,7 @@
         upsertItem(product);
         setNotice("ok", `追加：${product.product_name}（${product.tax_rate}%）`);
       } catch(e){
-        setNotice("err", "商品参照に失敗しました。通信状態/API設定を確認してください。");
+        setNotice("err", "商品がマスタに登録されいません");
       }
     }
 
