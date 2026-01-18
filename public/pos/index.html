@@ -311,7 +311,7 @@
     .modal-backdrop{ position:absolute; inset:0; background:rgba(0,0,0,.35); }
     .modal-card{ position:relative; width:min(520px, calc(100vw - 24px)); background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:14px; box-shadow:0 12px 32px rgba(0,0,0,.18); }
     .modal-title{ font-weight:800; font-size:16px; margin-bottom:8px; }
-    .modal-body{ font-size:14px; color:var(--fg); line-height:1.6; margin-bottom:12px; }
+    .modal-message{ font-size:14px; color:var(--fg); line-height:1.6; margin-bottom:12px; }
     .modal-actions{ display:flex; justify-content:flex-end; }
     .modal-actions .btn{ width:auto; }
   </style>
@@ -549,7 +549,6 @@
       return `${y}-${m}-${d} ${hh}:${mm}:${ss}`;
     }
     function yyyymmddFromRegisteredAtJst(registeredAtJst){
-      // "YYYY-MM-DD HH:mm:ss" -> "YYYYMMDD"
       return registeredAtJst.slice(0,4) + registeredAtJst.slice(5,7) + registeredAtJst.slice(8,10);
     }
 
@@ -565,15 +564,19 @@
       elRegNotice.textContent = text;
     }
 
-    function showSuccessModal(receiptNo){
+    // ===== Modal: hidden だけに頼らず display も強制で切替（復元バグ対策） =====
+    function forceHideSuccessModal(){
+      if (!elSuccessModal) return;
+      elSuccessModal.hidden = true;
+      elSuccessModal.style.display = "none";
+    }
+    function forceShowSuccessModal(receiptNo){
       if (!elSuccessModal) return;
       elSuccessModalMessage.textContent = `レシートNo${receiptNo}のデータを登録しました`;
       elSuccessModal.hidden = false;
+      elSuccessModal.style.display = "flex";
     }
-    function hideSuccessModal(){
-      if (!elSuccessModal) return;
-      elSuccessModal.hidden = true;
-    }
+
     function money(n){ return (n ?? 0).toLocaleString("ja-JP"); }
     function escapeHtml(s){
       return String(s).replace(/[&<>"']/g, (c) => ({
@@ -795,7 +798,6 @@
 
     // =========================
     // Subtotal
-    // 税額: 税率別税抜小計 × 税率 を1円未満切り上げ
     // =========================
     function calcTaxCeil(subtotalExcl, taxRate){
       return Math.ceil((subtotalExcl * taxRate) / 100);
@@ -833,7 +835,7 @@
     }
 
     // =========================
-    // CSV (offline or failure)
+    // CSV
     // =========================
     function csvEscape(v){
       const s = String(v ?? "");
@@ -976,7 +978,6 @@
         }))
       };
 
-      // Offline -> CSV
       if (!navigator.onLine){
         const csv = buildCsvText(registeredAtJst, receiptNo, txId, cashierName);
         showCsvFallback(txId, csv);
@@ -994,7 +995,7 @@
         setRegNotice("ok", `登録しました：${res.transaction_id}`);
         resetAll(true);
         keepFocus();
-        showSuccessModal(receiptNo);
+        forceShowSuccessModal(receiptNo);
       } catch(e){
         const msg = e && e.message ? e.message : "登録に失敗しました";
         const csv = buildCsvText(registeredAtJst, receiptNo, txId, cashierName);
@@ -1124,14 +1125,16 @@
       keepFocus();
     });
 
-    elSuccessModalBackdrop.addEventListener("click", () => hideSuccessModal());
-    elSuccessModalOk.addEventListener("click", () => hideSuccessModal());
+    if (elSuccessModalBackdrop) elSuccessModalBackdrop.addEventListener("click", () => forceHideSuccessModal());
+    if (elSuccessModalOk) elSuccessModalOk.addEventListener("click", () => forceHideSuccessModal());
 
-    // ブラウザの戻る/進む（bfcache）やリロードで、モーダルが開いた状態のまま復元されるケースがあるため
-    // 常に閉じた状態から開始する。
-    hideSuccessModal();
+    // 重要：復元（bfcache）やリロードでモーダルが開いたまま復活するのを潰す
+    forceHideSuccessModal();
     window.addEventListener("pageshow", () => {
-      hideSuccessModal();
+      forceHideSuccessModal();
+    });
+    window.addEventListener("load", () => {
+      forceHideSuccessModal();
     });
 
     elBtnClear.addEventListener("click", () => {
