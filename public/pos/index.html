@@ -1127,6 +1127,13 @@
     elSuccessModalBackdrop.addEventListener("click", () => hideSuccessModal());
     elSuccessModalOk.addEventListener("click", () => hideSuccessModal());
 
+    // ブラウザの戻る/進む（bfcache）やリロードで、モーダルが開いた状態のまま復元されるケースがあるため
+    // 常に閉じた状態から開始する。
+    hideSuccessModal();
+    window.addEventListener("pageshow", () => {
+      hideSuccessModal();
+    });
+
     elBtnClear.addEventListener("click", () => {
       const ok = confirm("この会計の内容をすべてクリアします。よろしいですか？");
       if (!ok) return;
