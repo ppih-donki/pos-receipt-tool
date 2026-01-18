@@ -218,7 +218,7 @@
 
         const sumQty = (items) => items.reduce((acc, it) => acc + Number(it.qty || 0), 0);
 
-        const dt = parseJst(r.registered_at_jst);
+        const dt = (r.registered_at_utc ? new Date(r.registered_at_utc) : parseJst(r.registered_at_jst));
         const printedAt = fmtJst(dt);
 
         const storeName = "キャンパスドンキ桃山大店";
@@ -237,8 +237,7 @@
           const taxRate = Number(it.tax_rate || 0);
           const qty = Number(it.qty || 0);
           const priceExcl = Number(it.price_excl || 0);
-          const lineExcl = (it.line_amount_excl != null) ? Number(it.line_amount_excl || 0) : (priceExcl * qty);
-          const lineIncl = lineExcl + Math.ceil(lineExcl * taxRate / 100);
+          const unitIncl = priceExcl + Math.ceil(priceExcl * taxRate / 100);
           const star = taxRate === 8 ? " *" : "";
           return `
             <div class="rp-sep"></div>
@@ -247,8 +246,8 @@
               <div class="rp-right"></div>
             </div>
             <div class="rp-row mono">
-              <div class="rp-left">${name} x${qty}</div>
-              <div class="rp-right">¥${money(lineIncl)}${star}</div>
+              <div class="rp-left">${name}</div>
+              <div class="rp-right">¥${money(unitIncl)}${star}</div>
             </div>
           `;
         }).join("");
@@ -292,7 +291,7 @@
           <div class="rp-row mono"><div class="rp-left">合計</div><div class="rp-right">¥${money(r.total_incl)}</div></div>
 
           <div class="rp-space"></div>
-          <div class="rp-row mono"><div class="rp-left">お支払い</div><div class="rp-right">¥${money(r.total_incl)}</div></div>
+          <div class="rp-row mono"><div class="rp-left">majica払</div><div class="rp-right">¥${money(r.total_incl)}</div></div>
 
           <div class="rp-space"></div>
           <div class="rp-row mono"><div class="rp-left">お買上点数</div><div class="rp-right">${totalQty}点</div></div>
