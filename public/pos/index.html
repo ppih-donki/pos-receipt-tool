@@ -22,6 +22,73 @@
     *{ box-sizing:border-box; }
     html,body{ margin:0; padding:0; color:var(--fg); background:var(--bg); font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans JP", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif; }
     button, input, select{ font:inherit; }
+
+    /* ====== Simple Lock (Password Gate) ====== */
+    #lockGate{
+      position: fixed;
+      inset: 0;
+      background: rgba(245,246,248,.92);
+      backdrop-filter: blur(10px);
+      z-index: 9999;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    #lockCard{
+      width: min(520px, 100%);
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    #lockCard .h{
+      padding: 14px 14px;
+      border-bottom: 1px solid var(--border);
+      font-weight: 700;
+      font-size: 14px;
+    }
+    #lockCard .b{
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    #lockRow{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex-wrap:wrap;
+    }
+    #lockPw{
+      flex:1;
+      min-width: 220px;
+      padding: 12px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: #fff;
+      outline: none;
+    }
+    #lockPw:focus{ border-color: rgba(37,99,235,.5); box-shadow: 0 0 0 4px rgba(37,99,235,.12); }
+    #lockErr{
+      display:none;
+      border-radius:12px;
+      padding:10px 12px;
+      border:1px solid rgba(220,38,38,.25);
+      background: rgba(220,38,38,.08);
+      color: #7f1d1d;
+      font-size: 13px;
+    }
+    #lockNote{
+      border-radius:12px;
+      padding:10px 12px;
+      border:1px solid var(--border);
+      background:#fafafa;
+      font-size:13px;
+      color:var(--muted);
+    }
+
     .wrap{ max-width:1100px; margin:0 auto; padding:14px; }
     .header{
       position: sticky;
@@ -304,147 +371,246 @@
       .sticky-actions .left, .sticky-actions .right{ width:100%; justify-content:space-between; }
       .btn{ width:100%; }
       .btn.icon{ width:44px; }
+      #lockRow{ flex-direction: column; align-items: stretch; }
+      #lockRow .btn{ width: 100%; }
     }
   </style>
 </head>
 
 <body>
-  <div class="header">
-    <div class="header-inner">
-      <div class="title">
-        <h1>簡易レジ（小計）</h1>
-        <div class="muted" style="font-size:12px;">JST: <span id="nowJst" class="mono">----</span></div>
-      </div>
-      <div class="meta">
-        <div class="pill" title="ネットワーク状態">
-          <span id="netDot" class="dot"></span>
-          <span id="netText">--</span>
+  <!-- Password Gate -->
+  <div id="lockGate" aria-hidden="true">
+    <div id="lockCard" role="dialog" aria-modal="true" aria-label="パスワード入力">
+      <div class="h">パスワードを入力</div>
+      <div class="b">
+        <div id="lockErr">パスワードが違います。</div>
+        <div id="lockRow">
+          <input id="lockPw" type="password" inputmode="numeric" autocomplete="current-password" placeholder="パスワード" />
+          <button class="btn primary" id="lockBtn" type="button">開く</button>
         </div>
-        <div class="pill" title="小計状態">
-          <span id="calcState" class="muted">小計未実行</span>
+        <div id="lockNote">※この端末では30日間、再入力不要にできます。</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="appRoot" hidden>
+    <div class="header">
+      <div class="header-inner">
+        <div class="title">
+          <h1>簡易レジ（小計）</h1>
+          <div class="muted" style="font-size:12px;">JST: <span id="nowJst" class="mono">----</span></div>
+        </div>
+        <div class="meta">
+          <div class="pill" title="ネットワーク状態">
+            <span id="netDot" class="dot"></span>
+            <span id="netText">--</span>
+          </div>
+          <div class="pill" title="小計状態">
+            <span id="calcState" class="muted">小計未実行</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="wrap">
+      <div class="grid">
+        <div class="card">
+          <div class="card-h">
+            <h2>スキャン・明細</h2>
+            <button class="btn ghost small" id="btnClear" type="button">会計をクリア</button>
+          </div>
+
+          <div class="card-b">
+            <div class="row" style="margin-bottom:12px;">
+              <div class="field" style="max-width:360px;">
+                <div class="label">レジ担当者（必須）</div>
+                <select id="cashierName">
+                  <option value="">読み込み中...</option>
+                </select>
+              </div>
+
+              <div class="field">
+                <div class="label">バーコード入力（スキャナのEnterで追加）</div>
+                <input id="scanInput" type="text" inputmode="numeric" autocomplete="off" placeholder="バーコードをスキャンしてください（数字1〜13桁）" />
+              </div>
+
+              <div style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
+                <button class="btn small" type="button" id="btnAddManual">JAN手入力</button>
+                <button class="btn small" type="button" id="btnFocus">JANスキャン</button>
+              </div>
+            </div>
+
+            <div id="noticeArea" class="notice" style="margin-bottom:12px;">
+              初期化中...
+            </div>
+
+            <div class="row" style="margin-bottom:10px;">
+              <div class="notice" style="flex:1;">
+                最後に追加した商品：<span id="lastAdded" class="muted">---</span>
+              </div>
+            </div>
+
+            <div class="table-wrap card" style="box-shadow:none; border-radius:12px; border:1px solid var(--border);">
+              <table>
+                <thead>
+                  <tr>
+                    <th style="width:42%;">商品</th>
+                    <th style="width:8%;">税率</th>
+                    <th class="right" style="width:12%;">税抜単価</th>
+                    <th style="width:20%; text-align:center;">数量</th>
+                    <th class="right" style="width:12%;">税抜金額</th>
+                    <th style="width:6%; text-align:center;">削除</th>
+                  </tr>
+                </thead>
+                <tbody id="itemsTbody"></tbody>
+              </table>
+            </div>
+
+            <div style="margin-top:12px;" class="notice warn" id="staleNotice" hidden>
+              明細が更新されました。小計は未更新です（小計ボタンを押してください）。
+            </div>
+          </div>
+
+          <div class="sticky-actions">
+            <div class="left">
+              <button class="btn primary" id="btnSubtotal" type="button">小計（税率別）</button>
+            </div>
+            <div class="right">
+              <span class="muted" style="font-size:12px;">※税額は「税率別税抜小計」×税率 を1円未満切り上げ</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-h">
+            <h2>小計・登録</h2>
+          </div>
+
+          <div class="card-b">
+            <div class="summary" style="margin-bottom:14px;">
+              <div class="sum-block">
+                <div class="sum-title">10% 対象</div>
+                <div class="sum-row"><span class="muted">税抜小計</span><span class="mono" id="excl10">0</span></div>
+                <div class="sum-row"><span class="muted">税額（切上げ）</span><span class="mono" id="tax10">0</span></div>
+                <div class="divider"></div>
+                <div class="sum-row"><strong>税込小計</strong><strong class="mono" id="incl10">0</strong></div>
+              </div>
+
+              <div class="sum-block">
+                <div class="sum-title">8% 対象</div>
+                <div class="sum-row"><span class="muted">税抜小計</span><span class="mono" id="excl8">0</span></div>
+                <div class="sum-row"><span class="muted">税額（切上げ）</span><span class="mono" id="tax8">0</strong></div>
+                <div class="divider"></div>
+                <div class="sum-row"><strong>税込小計</strong><strong class="mono" id="incl8">0</strong></div>
+              </div>
+
+              <div class="sum-block" style="border-color: rgba(37,99,235,.25); background: rgba(37,99,235,.06);">
+                <div class="sum-row"><strong>合計（税込）</strong><strong class="mono" id="totalIncl">0</strong></div>
+              </div>
+            </div>
+
+            <div class="field" style="margin-bottom:10px;">
+              <div class="label">レシート番号を入力（同日に同じレシート番号は登録不可）</div>
+              <input id="receiptNo" type="text" autocomplete="off" placeholder="決済レシート番号を入力（半角英数）" />
+            </div>
+
+            <div class="notice" style="margin-bottom:10px;">
+              transaction_id：<span class="mono" id="txId">----</span>
+            </div>
+
+            <div class="row" style="margin-bottom:10px;">
+              <button class="btn primary" id="btnRegister" type="button" style="flex:1;">登録</button>
+              <button class="btn" id="btnDownloadCsv" type="button" style="flex:1;" hidden>CSVをダウンロード</button>
+            </div>
+
+            <div class="notice" id="regNotice">
+              登録に成功すると、明細がクリアされ次の会計に進みます。送信失敗時はCSVダウンロードが表示されます。
+            </div>
+          </div>
         </div>
       </div>
     </div>
   </div>
 
-  <div class="wrap">
-    <div class="grid">
-      <div class="card">
-        <div class="card-h">
-          <h2>スキャン・明細</h2>
-          <button class="btn ghost small" id="btnClear" type="button">会計をクリア</button>
-        </div>
+  <script>
+    // =========================
+    // Simple Password Gate (local only)
+    // =========================
+    (function(){
+      const PASS = "7532";
+      const KEY = "simple_pos_auth_v1";
+      const TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
-        <div class="card-b">
-          <div class="row" style="margin-bottom:12px;">
-            <div class="field" style="max-width:360px;">
-              <div class="label">レジ担当者（必須）</div>
-              <select id="cashierName">
-                <option value="">読み込み中...</option>
-              </select>
-            </div>
+      const gate = document.getElementById("lockGate");
+      const appRoot = document.getElementById("appRoot");
+      const pw = document.getElementById("lockPw");
+      const btn = document.getElementById("lockBtn");
+      const err = document.getElementById("lockErr");
 
-            <div class="field">
-              <div class="label">バーコード入力（スキャナのEnterで追加）</div>
-              <input id="scanInput" type="text" inputmode="numeric" autocomplete="off" placeholder="バーコードをスキャンしてください（数字1〜13桁）" />
-            </div>
+      function readAuth(){
+        try{
+          const raw = localStorage.getItem(KEY);
+          if (!raw) return null;
+          const obj = JSON.parse(raw);
+          if (!obj || typeof obj.exp !== "number") return null;
+          return obj;
+        }catch(e){
+          return null;
+        }
+      }
 
-            <div style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
-              <button class="btn small" type="button" id="btnAddManual">JAN手入力</button>
-              <button class="btn small" type="button" id="btnFocus">JANスキャン</button>
-            </div>
-          </div>
+      function isValid(){
+        const a = readAuth();
+        return !!(a && a.exp > Date.now());
+      }
 
-          <div id="noticeArea" class="notice" style="margin-bottom:12px;">
-            初期化中...
-          </div>
+      function openApp(){
+        gate.style.display = "none";
+        gate.setAttribute("aria-hidden", "true");
+        appRoot.hidden = false;
+      }
 
-          <div class="row" style="margin-bottom:10px;">
-            <div class="notice" style="flex:1;">
-              最後に追加した商品：<span id="lastAdded" class="muted">---</span>
-            </div>
-          </div>
+      function showGate(){
+        appRoot.hidden = true;
+        gate.style.display = "flex";
+        gate.setAttribute("aria-hidden", "false");
+        err.style.display = "none";
+        pw.value = "";
+        setTimeout(() => { try{ pw.focus(); }catch(e){} }, 50);
+      }
 
-          <div class="table-wrap card" style="box-shadow:none; border-radius:12px; border:1px solid var(--border);">
-            <table>
-              <thead>
-                <tr>
-                  <th style="width:42%;">商品</th>
-                  <th style="width:8%;">税率</th>
-                  <th class="right" style="width:12%;">税抜単価</th>
-                  <th style="width:20%; text-align:center;">数量</th>
-                  <th class="right" style="width:12%;">税抜金額</th>
-                  <th style="width:6%; text-align:center;">削除</th>
-                </tr>
-              </thead>
-              <tbody id="itemsTbody"></tbody>
-            </table>
-          </div>
+      function saveAuth(){
+        const exp = Date.now() + TTL_MS;
+        try{
+          localStorage.setItem(KEY, JSON.stringify({ exp }));
+        }catch(e){}
+      }
 
-          <div style="margin-top:12px;" class="notice warn" id="staleNotice" hidden>
-            明細が更新されました。小計は未更新です（小計ボタンを押してください）。
-          </div>
-        </div>
+      function tryUnlock(){
+        if (String(pw.value || "").trim() === PASS){
+          saveAuth();
+          openApp();
+        } else {
+          err.style.display = "block";
+          try{ pw.focus(); pw.select(); }catch(e){}
+        }
+      }
 
-        <div class="sticky-actions">
-          <div class="left">
-            <button class="btn primary" id="btnSubtotal" type="button">小計（税率別）</button>
-          </div>
-          <div class="right">
-            <span class="muted" style="font-size:12px;">※税額は「税率別税抜小計」×税率 を1円未満切り上げ</span>
-          </div>
-        </div>
-      </div>
+      btn.addEventListener("click", tryUnlock);
+      pw.addEventListener("keydown", (e) => {
+        if (e.key === "Enter"){
+          e.preventDefault();
+          tryUnlock();
+        }
+      });
 
-      <div class="card">
-        <div class="card-h">
-          <h2>小計・登録</h2>
-        </div>
-
-        <div class="card-b">
-          <div class="summary" style="margin-bottom:14px;">
-            <div class="sum-block">
-              <div class="sum-title">10% 対象</div>
-              <div class="sum-row"><span class="muted">税抜小計</span><span class="mono" id="excl10">0</span></div>
-              <div class="sum-row"><span class="muted">税額（切上げ）</span><span class="mono" id="tax10">0</span></div>
-              <div class="divider"></div>
-              <div class="sum-row"><strong>税込小計</strong><strong class="mono" id="incl10">0</strong></div>
-            </div>
-
-            <div class="sum-block">
-              <div class="sum-title">8% 対象</div>
-              <div class="sum-row"><span class="muted">税抜小計</span><span class="mono" id="excl8">0</span></div>
-              <div class="sum-row"><span class="muted">税額（切上げ）</span><span class="mono" id="tax8">0</strong></div>
-              <div class="divider"></div>
-              <div class="sum-row"><strong>税込小計</strong><strong class="mono" id="incl8">0</strong></div>
-            </div>
-
-            <div class="sum-block" style="border-color: rgba(37,99,235,.25); background: rgba(37,99,235,.06);">
-              <div class="sum-row"><strong>合計（税込）</strong><strong class="mono" id="totalIncl">0</strong></div>
-            </div>
-          </div>
-
-          <div class="field" style="margin-bottom:10px;">
-            <div class="label">レシート番号を入力（同日に同じレシート番号は登録不可）</div>
-            <input id="receiptNo" type="text" autocomplete="off" placeholder="決済レシート番号を入力（半角英数）" />
-          </div>
-
-          <div class="notice" style="margin-bottom:10px;">
-            transaction_id：<span class="mono" id="txId">----</span>
-          </div>
-
-          <div class="row" style="margin-bottom:10px;">
-            <button class="btn primary" id="btnRegister" type="button" style="flex:1;">登録</button>
-            <button class="btn" id="btnDownloadCsv" type="button" style="flex:1;" hidden>CSVをダウンロード</button>
-          </div>
-
-          <div class="notice" id="regNotice">
-            登録に成功すると、明細がクリアされ次の会計に進みます。送信失敗時はCSVダウンロードが表示されます。
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
+      if (isValid()){
+        openApp();
+      } else {
+        showGate();
+      }
+    })();
+  </script>
 
   <script>
     // =========================
