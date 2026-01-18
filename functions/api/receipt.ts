@@ -54,8 +54,26 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
     if (!header) return json({ error: "NOT_FOUND" }, 404);
 
+    // transaction_items schema check (to include JAN/product_code if available)
+    const itemsTableInfo = await env.DB.prepare("PRAGMA table_info(transaction_items);").all<D1TableInfoRow>();
+    const itemColNames = new Set((itemsTableInfo?.results ?? []).map(r => String(r.name)));
+
+    const itemSelectCols: string[] = [
+      "product_name",
+      "qty",
+      "price_excl",
+      "line_amount_excl",
+      "tax_rate"
+    ];
+
+    // Prefer "product_code" as JAN field if present
+    if (itemColNames.has("product_code")) itemSelectCols.unshift("product_code");
+
+    // (Optional) If you also store category and want it later, uncomment:
+    // if (itemColNames.has("product_category")) itemSelectCols.splice(itemSelectCols.indexOf("product_name"), 0, "product_category");
+
     const { results: items } = await env.DB.prepare(
-      `SELECT product_name, qty, price_excl, line_amount_excl, tax_rate
+      `SELECT ${itemSelectCols.join(", ")}
        FROM transaction_items
        WHERE transaction_id = ?
        ORDER BY id ASC`
