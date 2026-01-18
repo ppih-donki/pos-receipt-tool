@@ -242,61 +242,170 @@
 
     function buildReceiptText(tx){
       const STORE_NAME = "キャンパスドンキ桃山大店";
+      const STORE_TEL = "TEL0570-094-911";
+      const STORE_HOURS = "営業時間　08:00-21:00";
 
       const lines = [];
-      const sep = "--------------------------------";
-      const dt = normalizeRegisteredAtForDisplay(tx);
-      const receiptNo = escapeText(tx.receipt_no);
+      const sep = "----------------------------------------";
 
-      const items = Array.isArray(tx.items) ? tx.items : [];
-      const taxSummary = Array.isArray(tx.tax_summary) ? tx.tax_summary : [];
+      const itemsRaw = Array.isArray(tx && tx.items) ? tx.items : [];
+      const taxSummary = Array.isArray(tx && tx.tax_summary) ? tx.tax_summary : [];
       const sum8 = taxSummary.find(x => Number(x && x.tax_rate) === 8) || null;
       const sum10 = taxSummary.find(x => Number(x && x.tax_rate) === 10) || null;
 
       function yen(n){
         const v = Number(n || 0);
-        return String(Math.trunc(v));
+        const i = Number.isFinite(v) ? Math.trunc(v) : 0;
+        return new Intl.NumberFormat("ja-JP").format(i);
       }
 
-      function itemName10(s){
-        const t = String(s || "");
-        return t.length <= 10 ? t : t.slice(0, 10);
+      function normalizeQty(v){
+        const q = Math.trunc(Number(v || 0));
+        return q > 0 ? q : 1;
       }
+
+      function safeStr(v){
+        return String(v ?? "").trim();
+      }
+
+      function getJan(it){
+        const jan = safeStr(
+          (it && (it.product_code ?? it.jan ?? it.jan_code ?? it.product_jan ?? it.barcode))
+        );
+        return jan;
+      }
+
+      function getName(it){
+        return safeStr(it && it.product_name);
+      }
+
+      function getTaxRate(it){
+        const r = Number(it && it.tax_rate);
+        return (r === 8 || r === 10) ? r : 10;
+      }
+
+      function getUnitPriceForDisplay(it){
+        // 現行APIのフィールド名は price_excl だが、UI上は「そのまま表示できる価格」として扱う
+        const v = Number(it && it.price_excl);
+        return Number.isFinite(v) ? v : 0;
+      }
+
+      function formatReceiptDate(tx){
+        const iso = safeStr(tx && (tx.registered_at_utc || tx.registered_at_jst));
+        if (!iso) return "";
+
+        let d = new Date(iso);
+        if (isNaN(d.getTime())){
+          // "YYYY-MM-DD HH:mm:ss" などの形式を吸収
+          const s = iso.replace(" ", "T");
+          d = new Date(s);
+        }
+        if (isNaN(d.getTime())) return "";
+
+        const parts = new Intl.DateTimeFormat("ja-JP", {
+          timeZone: "Asia/Tokyo",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          weekday: "short",
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false
+        }).formatToParts(d);
+        const get = (type) => (parts.find(p => p.type === type)?.value || "");
+        const y = get("year");
+        const m = get("month");
+        const da = get("day");
+        const wd = get("weekday");
+        const h = get("hour");
+        const mi = get("minute");
+        // 例: 2026年01月16日(金) 22:11
+        return `${y}年${m}月${da}日(${wd}) ${h}:${mi}`;
+      }
+
+      // 同一商品を集約（JAN + 商品名 + 税率 + 単価）
+      const grouped = new Map();
+      for (const it of itemsRaw){
+        const jan = getJan(it);
+        const name = getName(it);
+        const taxRate = getTaxRate(it);
+        const unit = getUnitPriceForDisplay(it);
+        const key = `${jan}||${name}||${taxRate}||${unit}`;
+        const prev = grouped.get(key);
+        if (prev){
+          prev.qty += normalizeQty(it && it.qty);
+        } else {
+          grouped.set(key, { jan, name, taxRate, unit, qty: normalizeQty(it && it.qty) });
+        }
+      }
+      const items = Array.from(grouped.values());
+
+      const totalQty = items.reduce((acc, it) => acc + (it.qty || 0), 0);
+      const taxTotal =
+        (sum8 ? (Number(sum8.tax_amount) || 0) : 0) +
+        (sum10 ? (Number(sum10.tax_amount) || 0) : 0);
 
       // ヘッダ
-      lines.push(STORE_NAME);
-      if (dt) lines.push(dt);
-      lines.push(`レシート番号 ${receiptNo}`);
+      lines.push("領収書");
+      lines.push("");
+      lines.push("株式会社ドン・キホーテ");
+      lines.push("本社：東京都目黒区青葉台2-19-10");
+      lines.push("");
+      lines.push(`${STORE_NAME}　${STORE_TEL}`);
+      lines.push(STORE_HOURS);
+      const dt = formatReceiptDate(tx);
+      lines.push(`取引時刻　${dt}`);
       lines.push(sep);
 
-      // 明細（商品名は11文字以降削除＝最大10文字）
+      // 明細（JAN行 → 商品名/価格行）
       for (const it of items){
-        const name = itemName10(it && it.product_name);
-        const qty = Math.max(1, Number(it && it.qty) || 1);
-        const priceExcl = Number(it && it.price_excl) || 0;
-        const lineExcl = Number(it && it.line_amount_excl);
-        const amountExcl = Number.isFinite(lineExcl) ? lineExcl : (priceExcl * qty);
+        const jan = safeStr(it.jan);
+        const name = safeStr(it.name);
+        const unit = Number(it.unit || 0);
+        const qty = normalizeQty(it.qty);
+        const taxRate = Number(it.taxRate || 10);
 
-        // 1行目：商品名 + 金額（税抜）
-        // 2行目：数量/単価
-        lines.push(`${name}  ${yen(amountExcl)}`);
-        lines.push(`  ${qty}点  @${yen(priceExcl)}`);
+        if (jan){
+          lines.push(`${jan}JAN`);
+        }
+
+        let line2 = `${name}　¥${yen(unit)}`;
+        if (taxRate === 8) line2 += "　*";
+        if (qty > 1) line2 += `　×${qty}`;
+        lines.push(line2);
+        lines.push("");
       }
+
+      // 明細末尾の空行は1つに整える
+      while (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
 
       lines.push(sep);
 
-      // 税率別小計
-      if (sum10){
-        lines.push(`10%対象  ${yen(sum10.subtotal_excl)}  消費税  ${yen(sum10.tax_amount)}`);
-      }
+      // 税（対象額は税込で表示）
       if (sum8){
-        lines.push(` 8%対象  ${yen(sum8.subtotal_excl)}  消費税  ${yen(sum8.tax_amount)}`);
+        lines.push(`8%対象額　¥${yen(sum8.subtotal_incl)}`);
+        lines.push(`8%税額　¥${yen(sum8.tax_amount)}`);
+        lines.push("");
       }
 
-      lines.push(sep);
+      if (sum10){
+        lines.push(`10%対象額　¥${yen(sum10.subtotal_incl)}`);
+        lines.push(`10%税額　¥${yen(sum10.tax_amount)}`);
+        lines.push(`（税額合計　¥${yen(taxTotal)}）`);
+      } else {
+        lines.push(`（税額合計　¥${yen(taxTotal)}）`);
+      }
 
-      // 合計
-      lines.push(`合計  ${yen(tx.total_incl)}`);
+      lines.push("");
+      lines.push(`お買上点数　${totalQty}点`);
+      lines.push(`合計　¥${yen(tx && tx.total_incl)}`);
+      lines.push(`お支払い　¥${yen(tx && tx.total_incl)}`);
+      lines.push(`（消費税等　¥${yen(taxTotal)}）`);
+      lines.push("");
+      lines.push("「*」印は軽減税率(8%)適用商品");
+      lines.push(sep);
+      lines.push("事業者登録番号　T3011001096370");
+      lines.push("店舗番号　0722");
 
       return lines.join("\n");
     }
