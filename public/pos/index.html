@@ -305,10 +305,68 @@
       .btn{ width:100%; }
       .btn.icon{ width:44px; }
     }
+
+    /* =========================
+       Simple Login (Password Gate)
+       ========================= */
+    .auth-overlay{
+      position: fixed;
+      inset: 0;
+      background: rgba(245,246,248,.92);
+      backdrop-filter: blur(10px);
+      z-index: 9999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+    }
+    .auth-card{
+      width: min(520px, 100%);
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .auth-card-h{
+      padding: 14px;
+      border-bottom: 1px solid var(--border);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap: 10px;
+    }
+    .auth-card-h strong{ font-size: 14px; }
+    .auth-card-b{ padding: 14px; }
+    .auth-row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    .auth-row .field{ min-width: 220px; flex: 1; }
+    .auth-help{ font-size: 12px; color: var(--muted); }
+    .auth-err{ margin-top: 10px; }
+
   </style>
 </head>
 
 <body>
+
+  <div id="authOverlay" class="auth-overlay" hidden>
+    <div class="auth-card" role="dialog" aria-modal="true" aria-labelledby="authTitle">
+      <div class="auth-card-h">
+        <strong id="authTitle">パスワード入力</strong>
+        <span class="muted" style="font-size:12px;">簡易ログイン</span>
+      </div>
+      <div class="auth-card-b">
+        <div class="auth-row">
+          <div class="field">
+            <div class="label">PASS</div>
+            <input id="authPass" type="password" inputmode="numeric" autocomplete="current-password" placeholder="パスワードを入力" />
+          </div>
+          <button class="btn primary" id="authBtn" type="button" style="min-width:120px;">ログイン</button>
+        </div>
+        <div class="auth-help" style="margin-top:10px;">1ヶ月間セッションを保持します。</div>
+        <div class="notice err auth-err" id="authErr" hidden>パスワードが違います</div>
+      </div>
+    </div>
+  </div>
   <div class="header">
     <div class="header-inner">
       <div class="title">
@@ -502,6 +560,90 @@
     const elBtnClear = document.getElementById("btnClear");
     const elBtnDownloadCsv = document.getElementById("btnDownloadCsv");
     const elRegNotice = document.getElementById("regNotice");
+
+    // =========================
+    // Simple Login (Password Gate)
+    // =========================
+    const AUTH = {
+      pass: "7532",
+      keyUntil: "pos_simple_auth_until",
+      ttlMs: 30 * 24 * 60 * 60 * 1000,
+    };
+
+    const elAuthOverlay = document.getElementById("authOverlay");
+    const elAuthPass = document.getElementById("authPass");
+    const elAuthBtn = document.getElementById("authBtn");
+    const elAuthErr = document.getElementById("authErr");
+
+    function getAuthUntil(){
+      const v = localStorage.getItem(AUTH.keyUntil);
+      const n = v ? Number(v) : 0;
+      return Number.isFinite(n) ? n : 0;
+    }
+
+    function isAuthed(){
+      return getAuthUntil() > Date.now();
+    }
+
+    function setAuthed(){
+      const until = Date.now() + AUTH.ttlMs;
+      localStorage.setItem(AUTH.keyUntil, String(until));
+    }
+
+    function showAuth(){
+      if (!elAuthOverlay) return;
+      elAuthOverlay.hidden = false;
+      if (elAuthErr) elAuthErr.hidden = true;
+      if (elAuthPass){
+        elAuthPass.value = "";
+        setTimeout(() => elAuthPass.focus(), 50);
+      }
+    }
+
+    function hideAuth(){
+      if (!elAuthOverlay) return;
+      elAuthOverlay.hidden = true;
+      if (elAuthErr) elAuthErr.hidden = true;
+    }
+
+    let appStarted = false;
+    function startApp(){
+      if (appStarted) return;
+      appStarted = true;
+
+      updateNetworkBadge();
+      tick();
+      setInterval(tick, 1000);
+
+      resetAll(true);
+      setNotice("", "初期化中...");
+      loadCashiers().finally(() => setTimeout(() => keepFocus(), 200));
+    }
+
+    function bindAuthEvents(){
+      if (!elAuthBtn || !elAuthPass) return;
+
+      const tryLogin = () => {
+        const v = (elAuthPass.value || "").trim();
+        if (v === AUTH.pass){
+          setAuthed();
+          hideAuth();
+          startApp();
+          return;
+        }
+        if (elAuthErr) elAuthErr.hidden = false;
+        elAuthPass.focus();
+        elAuthPass.select();
+      };
+
+      elAuthBtn.addEventListener("click", tryLogin);
+      elAuthPass.addEventListener("keydown", (e) => {
+        if (e.key === "Enter"){
+          e.preventDefault();
+          tryLogin();
+        }
+      });
+    }
 
     // =========================
     // JST utils (常にAsia/Tokyoでフォーマットする)
@@ -1110,13 +1252,14 @@
     // =========================
     // Init
     // =========================
-    updateNetworkBadge();
-    tick();
-    setInterval(tick, 1000);
+    bindAuthEvents();
 
-    resetAll(true);
-    setNotice("", "初期化中...");
-    loadCashiers().finally(() => setTimeout(() => keepFocus(), 200));
+    if (isAuthed()) {
+      hideAuth();
+      startApp();
+    } else {
+      showAuth();
+    }
   </script>
 </body>
 </html>
