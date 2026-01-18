@@ -989,17 +989,34 @@
       const ymd = yyyymmddNowJst();
       const txId = `${ymd}_${sanitizeReceiptForTx(receiptNo)}`;
 
+      // DB保存はUTCを正、表示はJSTへ変換
+      const registeredAtJst = formatNowJstDateTime();
+      const registeredAtUtc = getNowUtcIso();
+
       const payload = {
+        transaction_id: txId,
+        yyyymmdd: ymd,
+        registered_at_jst: registeredAtJst,
+        created_at_utc: registeredAtUtc,
         receipt_no: receiptNo,
                 cashier_name: cashierName,
+        total_incl: totals.totalIncl,
+        subtotal_excl_8: totals.subtotalExcl8,
+        tax_8: totals.tax8,
+        subtotal_incl_8: totals.subtotalIncl8,
+        subtotal_excl_10: totals.subtotalExcl10,
+        tax_10: totals.tax10,
+        subtotal_incl_10: totals.subtotalIncl10,
         items: items.map(it => ({
           product_code: it.product_code,
           product_category: it.product_category,
           product_name: it.product_name,
           pos_cost: it.pos_cost,
           price_excl: it.price_excl,
+          qty: it.qty,
+          line_amount_excl: it.price_excl * it.qty,
           tax_rate: it.tax_rate,
-          qty: it.qty
+          created_at_utc: registeredAtUtc
         }))
       };
 
