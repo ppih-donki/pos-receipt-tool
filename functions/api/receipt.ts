@@ -7,7 +7,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   if (request.method !== "GET") return json({ error: "Method Not Allowed" }, 405);
 
   const url = new URL(request.url);
-  const date = (url.searchParams.get("date") || "").trim(); // YYYY-MM-DD
+  const date = (url.searchParams.get("date") || url.searchParams.get("purchase_date") || "").trim(); // YYYY-MM-DD
   const receiptNo = (url.searchParams.get("receipt_no") || "").trim();
 
   if (!date || !receiptNo) return json({ error: "date and receipt_no are required" }, 400);
@@ -19,7 +19,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
   const header = await env.DB.prepare(
     `SELECT
-      transaction_id, yyyymmdd, receipt_no, registered_at_jst,
+      transaction_id, yyyymmdd, receipt_no, registered_at_jst, registered_at_utc,
       subtotal_excl_8, tax_8, subtotal_incl_8,
       subtotal_excl_10, tax_10, subtotal_incl_10,
       total_incl
@@ -41,6 +41,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     receipt: {
       transaction_id: header.transaction_id,
       receipt_no: header.receipt_no,
+      registered_at_utc: header.registered_at_utc,
       registered_at_jst: header.registered_at_jst,
       items,
       tax_summary: [
