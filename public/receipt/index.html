@@ -176,7 +176,7 @@
           throw new Error(msg);
         }
         if (!data || !data.receipt){
-          throw new Error("見つかりませんでした、日付とレシート番号を確認してください");
+          throw new Error("レシートデータが見つかりませんでした、購入日とレシート番号を確認してください");
         }
 
         const r = data.receipt;
