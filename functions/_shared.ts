@@ -30,6 +30,59 @@ export function nowUtcIso(): string {
 }
 
 /**
+ * ISO UTC文字列 (toISOString) をチェックして Date に変換
+ */
+export function asUtcIso(v: unknown, field: string): string {
+  if (typeof v !== "string" || v.trim() === "") throw new Error(`${field} is required`);
+  const s = v.trim();
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) throw new Error(`${field} must be a valid ISO datetime`);
+  return d.toISOString(); // 正規化
+}
+
+function jstPartsFromDate(dt: Date): {year:string; month:string; day:string; hour:string; minute:string; second:string} {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false
+  }).formatToParts(dt);
+  const get = (t: string) => (parts.find(p => p.type === t)?.value ?? "");
+  return {
+    year: get("year"),
+    month: get("month"),
+    day: get("day"),
+    hour: get("hour"),
+    minute: get("minute"),
+    second: get("second")
+  };
+}
+
+/**
+ * registered_at_utc (ISO) から、表示用 registered_at_jst (YYYY-MM-DD HH:mm:ss) を生成
+ */
+export function formatJstDateTimeFromUtcIso(registeredAtUtcIso: string): string {
+  const dt = new Date(registeredAtUtcIso);
+  if (Number.isNaN(dt.getTime())) throw new Error("registered_at_utc must be a valid ISO datetime");
+  const p = jstPartsFromDate(dt);
+  return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}:${p.second}`;
+}
+
+/**
+ * registered_at_utc (ISO) から yyyymmdd を生成（JST基準）
+ */
+export function yyyymmddFromUtcIso(registeredAtUtcIso: string): string {
+  const dt = new Date(registeredAtUtcIso);
+  if (Number.isNaN(dt.getTime())) throw new Error("registered_at_utc must be a valid ISO datetime");
+  const p = jstPartsFromDate(dt);
+  return `${p.year}${p.month}${p.day}`;
+}
+
+/**
  * registered_at_jst: "YYYY-MM-DD HH:mm:ss" (JST) を想定
  * そこから yyyymmdd を作る
  */
