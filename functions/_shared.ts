@@ -126,3 +126,25 @@ export function asTaxRate(v: unknown, field: string): 8 | 10 {
 export function sanitizeReceiptNo(receiptNo: string): string {
   return receiptNo.trim().replace(/[^A-Za-z0-9_-]/g, "_");
 }
+
+/**
+ * registered_at_jst: "YYYY-MM-DD HH:mm:ss" (JST固定) を UTC ISO文字列に変換
+ * - JSTは常にUTC+9（DSTなし）として扱う
+ */
+export function utcIsoFromRegisteredAtJst(registeredAtJst: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}$/.test(registeredAtJst)) {
+    throw new Error("registered_at_jst must be 'YYYY-MM-DD HH:mm:ss' (JST)");
+  }
+  const y = Number(registeredAtJst.slice(0, 4));
+  const m = Number(registeredAtJst.slice(5, 7));
+  const d = Number(registeredAtJst.slice(8, 10));
+  const hh = Number(registeredAtJst.slice(11, 13));
+  const mm = Number(registeredAtJst.slice(14, 16));
+  const ss = Number(registeredAtJst.slice(17, 19));
+
+  // JST(UTC+9) -> UTC
+  const ms = Date.UTC(y, m - 1, d, hh - 9, mm, ss);
+  const dt = new Date(ms);
+  if (Number.isNaN(dt.getTime())) throw new Error("registered_at_jst must be a valid datetime");
+  return dt.toISOString();
+}
