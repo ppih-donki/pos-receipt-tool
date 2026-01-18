@@ -149,7 +149,7 @@
     //   - /api/transactions/lookup?date=YYYY-MM-DD&receipt=XXX
     const API = {
       lookup: (dateYYYYMMDDorYYYYMMDDash, receiptNo) =>
-        `/api/receipt?purchase_date=${encodeURIComponent(dateYYYYMMDDorYYYYMMDDash)}&receipt_no=${encodeURIComponent(receiptNo)}`
+        `/api/receipt?date=${encodeURIComponent(dateYYYYMMDDorYYYYMMDDash)}&receipt_no=${encodeURIComponent(receiptNo)}`
     };
 
     const elNowJst = document.getElementById("nowJst");
@@ -185,18 +185,46 @@
       return String(s ?? "");
     }
 
-    // 既に "YYYY-MM-DD HH:mm:ss"（JST）で保存されている想定なら、そのまま表示するのが一番安全
-    function normalizeRegisteredAtJst(v){
+    function formatJstYmdHmFromUtcIso(iso){
+      if (!iso) return "";
+      const d = new Date(String(iso));
+      if (isNaN(d.getTime())) return "";
+
+      const parts = new Intl.DateTimeFormat("ja-JP", {
+        timeZone: "Asia/Tokyo",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false
+      }).formatToParts(d);
+
+      const get = (type) => (parts.find(p => p.type === type)?.value || "");
+      const y = get("year");
+      const m = get("month");
+      const da = get("day");
+      const h = get("hour");
+      const mi = get("minute");
+      return `${y}/${m}/${da} ${h}:${mi}`;
+    }
+
+    // UTCが無いケース（過去データ等）を吸収するためのフォールバック
+    function normalizeRegisteredAtForDisplay(tx){
+      const fromUtc = formatJstYmdHmFromUtcIso(tx && tx.registered_at_utc);
+      if (fromUtc) return fromUtc;
+
+      const v = tx && tx.registered_at_jst;
       if (!v) return "";
       const s = String(v).trim();
-
-      // もしISO(例: 2026-01-17T08:29:38.000Z)が来ても、Asia/Tokyoに変換して表示
+      // もしISOが来た場合
       if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(s)){
-        const d = new Date(s);
-        if (!isNaN(d.getTime())) return JST_FMT.format(d);
+        const fromIso = formatJstYmdHmFromUtcIso(s);
+        if (fromIso) return fromIso;
       }
-
-      // それ以外はそのまま（"YYYY-MM-DD HH:mm:ss" など）
+      // "YYYY-MM-DD HH:mm:ss" → "YYYY/MM/DD HH:mm" に寄せる（秒は落とす）
+      const m = s.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);
+      if (m) return `${m[1]}/${m[2]}/${m[3]} ${m[4]}:${m[5]}`;
       return s;
     }
 
@@ -213,40 +241,62 @@
     }
 
     function buildReceiptText(tx){
-      // 期待するJSON例（あなたの実装に合わせてフィールド名は調整OK）
-      // tx = {
-      //   transaction_id, receipt_no, registered_at_jst,
-      //   subtotal_excl_10, tax_10, subtotal_incl_10,
-      //   subtotal_excl_8, tax_8, subtotal_incl_8,
-      //   total_incl,
-      //   items: [{product_name, qty, price_excl, line_amount_excl, tax_rate}, ...]
-      // }
+      const STORE_NAME = "キャンパスドンキ桃山大店";
+
       const lines = [];
-      lines.push("購入者控え（簡易レシート）");
-      lines.push(`購入日: ${normalizeRegisteredAtJst(tx.registered_at_jst)} (JST)`);
-      lines.push(`レシート番号: ${escapeText(tx.receipt_no)}`);
-      lines.push(`取引ID: ${escapeText(tx.transaction_id)}`);
-      lines.push("");
+      const sep = "--------------------------------";
+      const dt = normalizeRegisteredAtForDisplay(tx);
+      const receiptNo = escapeText(tx.receipt_no);
 
       const items = Array.isArray(tx.items) ? tx.items : [];
-      if (items.length > 0){
-        lines.push("明細:");
-        for (const it of items){
-          const name = escapeText(it.product_name);
-          const qty = Number(it.qty || 0);
-          const priceExcl = Number(it.price_excl || 0);
-          const lineExcl = Number(it.line_amount_excl || (priceExcl * qty));
-          const taxRate = Number(it.tax_rate || 0);
-          lines.push(`- ${name}  x${qty}  税抜単価:${priceExcl}  税抜金額:${lineExcl}  税率:${taxRate}%`);
-        }
-        lines.push("");
+      const taxSummary = Array.isArray(tx.tax_summary) ? tx.tax_summary : [];
+      const sum8 = taxSummary.find(x => Number(x && x.tax_rate) === 8) || null;
+      const sum10 = taxSummary.find(x => Number(x && x.tax_rate) === 10) || null;
+
+      function yen(n){
+        const v = Number(n || 0);
+        return String(Math.trunc(v));
       }
 
-      lines.push("小計（税率別）:");
-      lines.push(`10% 税抜:${Number(tx.subtotal_excl_10||0)}  税額:${Number(tx.tax_10||0)}  税込:${Number(tx.subtotal_incl_10||0)}`);
-      lines.push(` 8% 税抜:${Number(tx.subtotal_excl_8||0)}  税額:${Number(tx.tax_8||0)}  税込:${Number(tx.subtotal_incl_8||0)}`);
-      lines.push("");
-      lines.push(`合計（税込）: ${Number(tx.total_incl||0)}`);
+      function itemName10(s){
+        const t = String(s || "");
+        return t.length <= 10 ? t : t.slice(0, 10);
+      }
+
+      // ヘッダ
+      lines.push(STORE_NAME);
+      if (dt) lines.push(dt);
+      lines.push(`レシート番号 ${receiptNo}`);
+      lines.push(sep);
+
+      // 明細（商品名は11文字以降削除＝最大10文字）
+      for (const it of items){
+        const name = itemName10(it && it.product_name);
+        const qty = Math.max(1, Number(it && it.qty) || 1);
+        const priceExcl = Number(it && it.price_excl) || 0;
+        const lineExcl = Number(it && it.line_amount_excl);
+        const amountExcl = Number.isFinite(lineExcl) ? lineExcl : (priceExcl * qty);
+
+        // 1行目：商品名 + 金額（税抜）
+        // 2行目：数量/単価
+        lines.push(`${name}  ${yen(amountExcl)}`);
+        lines.push(`  ${qty}点  @${yen(priceExcl)}`);
+      }
+
+      lines.push(sep);
+
+      // 税率別小計
+      if (sum10){
+        lines.push(`10%対象  ${yen(sum10.subtotal_excl)}  消費税  ${yen(sum10.tax_amount)}`);
+      }
+      if (sum8){
+        lines.push(` 8%対象  ${yen(sum8.subtotal_excl)}  消費税  ${yen(sum8.tax_amount)}`);
+      }
+
+      lines.push(sep);
+
+      // 合計
+      lines.push(`合計  ${yen(tx.total_incl)}`);
 
       return lines.join("\n");
     }
@@ -266,9 +316,7 @@
       try{
         const data = await apiGetJson(API.lookup(d, r));
 
-        // 既存実装に合わせて受け取るキーを調整してください
-        // 例: { transaction: {...} } / { result: {...} } / そのまま {...}
-        const tx = data.transaction || data.result || data;
+        const tx = (data && (data.receipt || data.transaction || data.result)) || data;
 
         if (!tx || !tx.transaction_id){
           setMsg("err", "見つかりませんでした。入力内容を確認してください。");
@@ -276,9 +324,12 @@
         }
 
         setMsg("ok", "見つかりました。");
-        elResultMeta.textContent = `transaction_id: ${escapeText(tx.transaction_id)}`;
+        elResultMeta.textContent = "";
         elReceiptText.textContent = buildReceiptText(tx);
         elResultCard.hidden = false;
+
+        // レシートのみのシンプル表示に寄せる（検索後は入力エリアを隠す）
+        document.querySelector(".card").hidden = true;
 
       } catch(e){
         setMsg("err", `検索に失敗（正しい購入日とレシート番号を入力してください）：${e.message || e}`);
