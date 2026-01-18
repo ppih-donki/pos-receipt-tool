@@ -123,7 +123,7 @@
           <div style="min-width:180px; display:flex; gap:10px;">
             <button class="btn primary" id="btnSearch" type="button" style="flex:1;">検索</button>
           </div>
-        </div>
+        behaves</div>
 
         <div id="msg" class="notice">購入日とレシート番号を入力して検索してください。</div>
       </div>
@@ -242,11 +242,15 @@
 
     function buildReceiptText(tx){
       const STORE_NAME = "キャンパスドンキ桃山大店";
-      const STORE_TEL = "TEL0570-094-911";
-      const STORE_HOURS = "営業時間　08:00-21:00";
+      const STORE_TEL = "0570-094-911";
+      const STORE_HOURS = "08:00-21:00";
 
-      const lines = [];
-      const sep = "----------------------------------------";
+      const COMPANY = "株式会社ドン・キホーテ";
+      const HQ = "本社：東京都目黒区青葉台2-19-10";
+      const BUSINESS_REG_NO = "T3011001096370";
+      const STORE_NO = "00722";
+
+      const sep = "-----------------------------------------";
 
       const itemsRaw = Array.isArray(tx && tx.items) ? tx.items : [];
       const taxSummary = Array.isArray(tx && tx.tax_summary) ? tx.tax_summary : [];
@@ -259,9 +263,10 @@
         return new Intl.NumberFormat("ja-JP").format(i);
       }
 
-      function normalizeQty(v){
-        const q = Math.trunc(Number(v || 0));
-        return q > 0 ? q : 1;
+      function toInt(v, def){
+        const n = Number(v);
+        if (!Number.isFinite(n)) return def;
+        return Math.trunc(n);
       }
 
       function safeStr(v){
@@ -269,36 +274,47 @@
       }
 
       function getJan(it){
-        const jan = safeStr(
-          (it && (it.product_code ?? it.jan ?? it.jan_code ?? it.product_jan ?? it.barcode))
-        );
-        return jan;
+        return safeStr(it && (it.product_code ?? it.jan ?? it.jan_code ?? it.product_jan ?? it.barcode));
       }
 
       function getName(it){
         return safeStr(it && it.product_name);
       }
 
+      function getQty(it){
+        const q = toInt(it && it.qty, 1);
+        return q > 0 ? q : 1;
+      }
+
       function getTaxRate(it){
-        const r = Number(it && it.tax_rate);
+        const r = toInt(it && it.tax_rate, 10);
         return (r === 8 || r === 10) ? r : 10;
       }
 
-      function getUnitPriceForDisplay(it){
-        // 現行APIのフィールド名は price_excl だが、UI上は「そのまま表示できる価格」として扱う
-        const v = Number(it && it.price_excl);
-        return Number.isFinite(v) ? v : 0;
+      function getLineAmountIncl(it){
+        // 優先: line_amount_incl（DB/決済明細の行合計）
+        const v1 = Number(it && it.line_amount_incl);
+        if (Number.isFinite(v1)) return Math.trunc(v1);
+
+        // 次点: line_amount_excl（同名だった場合でも表示はそのまま使う）
+        const v2 = Number(it && it.line_amount_excl);
+        if (Number.isFinite(v2)) return Math.trunc(v2);
+
+        // 最後: 単価×数量（price_excl を単価として扱う）
+        const unit = Number(it && it.price_excl);
+        const qty = getQty(it);
+        if (Number.isFinite(unit)) return Math.trunc(unit) * qty;
+
+        return 0;
       }
 
-      function formatReceiptDate(tx){
+      function formatReceiptDateJapanese(tx){
         const iso = safeStr(tx && (tx.registered_at_utc || tx.registered_at_jst));
         if (!iso) return "";
 
         let d = new Date(iso);
         if (isNaN(d.getTime())){
-          // "YYYY-MM-DD HH:mm:ss" などの形式を吸収
-          const s = iso.replace(" ", "T");
-          d = new Date(s);
+          d = new Date(iso.replace(" ", "T"));
         }
         if (isNaN(d.getTime())) return "";
 
@@ -312,6 +328,7 @@
           minute: "2-digit",
           hour12: false
         }).formatToParts(d);
+
         const get = (type) => (parts.find(p => p.type === type)?.value || "");
         const y = get("year");
         const m = get("month");
@@ -319,93 +336,138 @@
         const wd = get("weekday");
         const h = get("hour");
         const mi = get("minute");
-        // 例: 2026年01月16日(金) 22:11
         return `${y}年${m}月${da}日(${wd}) ${h}:${mi}`;
       }
 
-      // 同一商品を集約（JAN + 商品名 + 税率 + 単価）
+      function splitNameForReceipt(name, maxLen){
+        const s = String(name || "");
+        if (s.length <= maxLen) return [s];
+
+        // maxLen 以内の最後の空白（半角/全角）で切る（なければハードカット）
+        const head = s.slice(0, maxLen);
+        const idx = Math.max(head.lastIndexOf(" "), head.lastIndexOf("　"));
+        if (idx >= 0 && idx >= Math.floor(maxLen * 0.6)){
+          const a = s.slice(0, idx).trimEnd();
+          const b = s.slice(idx).trimStart();
+          return [a, b];
+        }
+
+        return [s.slice(0, maxLen), s.slice(maxLen).trimStart()];
+      }
+
+      // 同一商品を集約（JAN + 商品名 + 税率 + 行金額）
       const grouped = new Map();
       for (const it of itemsRaw){
         const jan = getJan(it);
         const name = getName(it);
         const taxRate = getTaxRate(it);
-        const unit = getUnitPriceForDisplay(it);
-        const key = `${jan}||${name}||${taxRate}||${unit}`;
+        const qty = getQty(it);
+
+        const unitLine = getLineAmountIncl(it); // ここは「その行の合計」を前提
+        // 同じJAN/商品名/税率 でも、値引き等で行合計が変わる可能性があるので amount もキーに含める
+        const key = `${jan}||${name}||${taxRate}||${unitLine}`;
+
         const prev = grouped.get(key);
         if (prev){
-          prev.qty += normalizeQty(it && it.qty);
+          prev.qty += qty;
+          prev.amount += unitLine; // 行合計を積む
         } else {
-          grouped.set(key, { jan, name, taxRate, unit, qty: normalizeQty(it && it.qty) });
+          grouped.set(key, { jan, name, taxRate, qty, amount: unitLine });
         }
       }
       const items = Array.from(grouped.values());
 
-      const totalQty = items.reduce((acc, it) => acc + (it.qty || 0), 0);
-      const taxTotal =
-        (sum8 ? (Number(sum8.tax_amount) || 0) : 0) +
-        (sum10 ? (Number(sum10.tax_amount) || 0) : 0);
+      const totalQty = items.reduce((acc, it) => acc + (toInt(it.qty, 0) || 0), 0);
 
-      // ヘッダ
+      const taxTotal =
+        (sum8 ? toInt(sum8.tax_amount, 0) : 0) +
+        (sum10 ? toInt(sum10.tax_amount, 0) : 0);
+
+      const totalInclFromDecision =
+        (tx && Number.isFinite(Number(tx.total_incl))) ? toInt(tx.total_incl, 0) : 0;
+
+      const lines = [];
+
+      // ヘッダ（指定レイアウト固定）
       lines.push("領収書");
       lines.push("");
-      lines.push("株式会社ドン・キホーテ");
-      lines.push("本社：東京都目黒区青葉台2-19-10");
+      lines.push(COMPANY);
       lines.push("");
-      lines.push(`${STORE_NAME}　${STORE_TEL}`);
-      lines.push(STORE_HOURS);
-      const dt = formatReceiptDate(tx);
-      lines.push(`取引時刻　${dt}`);
+      lines.push(HQ);
+      lines.push("");
+      lines.push(STORE_NAME);
+      lines.push("");
+      lines.push(`TEL：${STORE_TEL}`);
+      lines.push("");
+      lines.push(`営業時間　${STORE_HOURS}`);
+      lines.push("");
+      lines.push(`取引時刻　${formatReceiptDateJapanese(tx)}`);
+      lines.push("");
       lines.push(sep);
+      lines.push("");
 
-      // 明細（JAN行 → 商品名/価格行）
+      // 明細（JAN 行 → 商品行）
       for (const it of items){
         const jan = safeStr(it.jan);
         const name = safeStr(it.name);
-        const unit = Number(it.unit || 0);
-        const qty = normalizeQty(it.qty);
-        const taxRate = Number(it.taxRate || 10);
+        const qty = toInt(it.qty, 1);
+        const amount = toInt(it.amount, 0);
+        const taxRate = toInt(it.taxRate, 10);
 
-        if (jan){
-          lines.push(`${jan}JAN`);
+        lines.push(jan);
+        const nameParts = splitNameForReceipt(name, 22);
+
+        if (nameParts.length === 1){
+          let line = `${nameParts[0]}　×${qty}　¥${yen(amount)}`;
+          if (taxRate === 8) line += " *";
+          lines.push(line);
+        } else {
+          // 1行目は商品名だけ、2行目に残り＋数量＋金額
+          lines.push(nameParts[0]);
+          let line2 = `${nameParts.slice(1).join("")}　×${qty}　¥${yen(amount)}`;
+          if (taxRate === 8) line2 += " *";
+          lines.push(line2);
         }
 
-        let line2 = `${name}　¥${yen(unit)}`;
-        if (taxRate === 8) line2 += "　*";
-        if (qty > 1) line2 += `　×${qty}`;
-        lines.push(line2);
         lines.push("");
       }
 
-      // 明細末尾の空行は1つに整える
+      // 明細末尾の空行は1つだけ残す（見た目揃え）
       while (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
-
+      lines.push("");
       lines.push(sep);
+      lines.push("");
+      lines.push(`お買上点数　${totalQty}点`);
+      lines.push("");
+      lines.push(sep);
+      lines.push("");
 
-      // 税（対象額は税込で表示）
+      // 税ブロック（決済データを正）
       if (sum8){
         lines.push(`8%対象額　¥${yen(sum8.subtotal_incl)}`);
         lines.push(`8%税額　¥${yen(sum8.tax_amount)}`);
         lines.push("");
       }
-
       if (sum10){
         lines.push(`10%対象額　¥${yen(sum10.subtotal_incl)}`);
         lines.push(`10%税額　¥${yen(sum10.tax_amount)}`);
-        lines.push(`（税額合計　¥${yen(taxTotal)}）`);
-      } else {
-        lines.push(`（税額合計　¥${yen(taxTotal)}）`);
+        lines.push("");
       }
-
+      lines.push(`（税額合計　¥${yen(taxTotal)}）`);
       lines.push("");
-      lines.push(`お買上点数　${totalQty}点`);
-      lines.push(`合計　¥${yen(tx && tx.total_incl)}`);
-      lines.push(`お支払い　¥${yen(tx && tx.total_incl)}`);
-      lines.push(`（消費税等　¥${yen(taxTotal)}）`);
+      lines.push(sep);
+      lines.push("");
+      lines.push(`合計　¥${yen(totalInclFromDecision)}`);
+      lines.push("");
+      lines.push(`お支払い　¥${yen(totalInclFromDecision)}`);
+      lines.push("");
+      lines.push(`（内消費税等　¥${yen(taxTotal)}）`);
       lines.push("");
       lines.push("「*」印は軽減税率(8%)適用商品");
-      lines.push(sep);
-      lines.push("事業者登録番号　T3011001096370");
-      lines.push("店舗番号　0722");
+      lines.push("");
+      lines.push(`事業者登録番号　${BUSINESS_REG_NO}`);
+      lines.push("");
+      lines.push(`店舗番号　${STORE_NO}`);
 
       return lines.join("\n");
     }
