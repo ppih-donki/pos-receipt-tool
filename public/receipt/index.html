@@ -281,7 +281,7 @@
         elResultCard.hidden = false;
 
       } catch(e){
-        setMsg("err", `検索に失敗しました：${e.message || e}`);
+        setMsg("err", `検索に失敗（正しい購入日とレシート番号を入力してください）：${e.message || e}`);
       } finally {
         elBtnSearch.disabled = false;
         elBtnSearch.textContent = "検索";
