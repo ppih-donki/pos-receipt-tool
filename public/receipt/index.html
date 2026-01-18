@@ -163,12 +163,20 @@
         elOut.hidden = true;
 
         const res = await fetch(API.receipt(date, receiptNo), { headers:{ "Accept":"application/json" } });
+        const ct = (res.headers.get("content-type") || "").toLowerCase();
         const text = await res.text().catch(()=> "");
         let data = null;
         try{ data = text ? JSON.parse(text) : null; } catch(e) {}
         if (!res.ok){
+          // Avoid dumping raw HTML (e.g., Cloudflare error pages) into the UI.
+          if (ct.includes("text/html") || /<!doctype\s+html|<html/i.test(text)){
+            throw new Error(`サーバーエラー（HTTP ${res.status}）`);
+          }
           const msg = (data && data.error) ? data.error : (text || `HTTP ${res.status}`);
           throw new Error(msg);
+        }
+        if (!data || !data.receipt){
+          throw new Error("見つかりませんでした。");
         }
 
         const r = data.receipt;
@@ -235,10 +243,18 @@
           const jan = String(it.product_code || "");
           const name = cutName(it.product_name);
           const taxRate = Number(it.tax_rate || 0);
-          const qty = Number(it.qty || 0);
+          const qtyRaw = Number(it.qty || 0);
+          const qty = Number.isFinite(qtyRaw) && qtyRaw > 0 ? qtyRaw : 1;
+
           const priceExcl = Number(it.price_excl || 0);
-          const unitIncl = priceExcl + Math.ceil(priceExcl * taxRate / 100);
+          const lineExcl = (it.line_amount_excl != null)
+            ? Number(it.line_amount_excl || 0)
+            : (priceExcl * qty);
+          const lineTax = Math.ceil(lineExcl * taxRate / 100);
+          const lineIncl = lineExcl + lineTax;
+
           const star = taxRate === 8 ? " *" : "";
+          const qtyText = qty ? ` x${qty}` : "";
           return `
             <div class="rp-sep"></div>
             <div class="rp-row mono">
@@ -246,8 +262,8 @@
               <div class="rp-right"></div>
             </div>
             <div class="rp-row mono">
-              <div class="rp-left">${name}</div>
-              <div class="rp-right">¥${money(unitIncl)}${star}</div>
+              <div class="rp-left">${name}${qtyText}</div>
+              <div class="rp-right">¥${money(lineIncl)}${star}</div>
             </div>
           `;
         }).join("");
