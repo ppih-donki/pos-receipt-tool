@@ -305,68 +305,10 @@
       .btn{ width:100%; }
       .btn.icon{ width:44px; }
     }
-
-    /* =========================
-       Simple Login (Password Gate)
-       ========================= */
-    .auth-overlay{
-      position: fixed;
-      inset: 0;
-      background: rgba(245,246,248,.92);
-      backdrop-filter: blur(10px);
-      z-index: 9999;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 18px;
-    }
-    .auth-card{
-      width: min(520px, 100%);
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow);
-      overflow: hidden;
-    }
-    .auth-card-h{
-      padding: 14px;
-      border-bottom: 1px solid var(--border);
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap: 10px;
-    }
-    .auth-card-h strong{ font-size: 14px; }
-    .auth-card-b{ padding: 14px; }
-    .auth-row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
-    .auth-row .field{ min-width: 220px; flex: 1; }
-    .auth-help{ font-size: 12px; color: var(--muted); }
-    .auth-err{ margin-top: 10px; }
-
   </style>
 </head>
 
 <body>
-
-  <div id="authOverlay" class="auth-overlay" hidden>
-    <div class="auth-card" role="dialog" aria-modal="true" aria-labelledby="authTitle">
-      <div class="auth-card-h">
-        <strong id="authTitle">パスワード入力</strong>
-        <span class="muted" style="font-size:12px;">簡易ログイン</span>
-      </div>
-      <div class="auth-card-b">
-        <div class="auth-row">
-          <div class="field">
-            <div class="label">PASS</div>
-            <input id="authPass" type="password" inputmode="numeric" autocomplete="current-password" placeholder="パスワードを入力" />
-          </div>
-          <button class="btn primary" id="authBtn" type="button" style="min-width:120px;">ログイン</button>
-        </div>
-        <div class="auth-help" style="margin-top:10px;">1ヶ月間セッションを保持します。</div>
-        <div class="notice err auth-err" id="authErr" hidden>パスワードが違います</div>
-      </div>
-    </div>
-  </div>
   <div class="header">
     <div class="header-inner">
       <div class="title">
@@ -417,85 +359,74 @@
             初期化中...
           </div>
 
-          <div class="notice warn" id="staleNotice" hidden style="margin-bottom:12px;">
-            明細が更新されました。小計が古い可能性があります。必要なら「小計更新」を押してください。
+          <div class="row" style="margin-bottom:10px;">
+            <div class="notice" style="flex:1;">
+              最後に追加した商品：<span id="lastAdded" class="muted">---</span>
+            </div>
           </div>
 
-          <div class="notice" style="margin-bottom:12px;">
-            最終追加：<span class="mono" id="lastAdded">---</span>
-          </div>
-
-          <div class="table-wrap card" style="box-shadow:none; border-radius:12px;">
+          <div class="table-wrap card" style="box-shadow:none; border-radius:12px; border:1px solid var(--border);">
             <table>
               <thead>
                 <tr>
-                  <th style="min-width:160px;">商品コード</th>
-                  <th style="min-width:220px;">商品名</th>
-                  <th style="min-width:90px;">税率</th>
-                  <th style="min-width:110px;" class="right">税抜単価</th>
-                  <th style="min-width:110px;" class="right">原価</th>
-                  <th style="min-width:170px;" class="right">数量</th>
-                  <th style="min-width:120px;" class="right">税抜小計</th>
-                  <th style="min-width:90px;">操作</th>
+                  <th style="width:42%;">商品</th>
+                  <th style="width:8%;">税率</th>
+                  <th class="right" style="width:12%;">税抜単価</th>
+                  <th style="width:20%; text-align:center;">数量</th>
+                  <th class="right" style="width:12%;">税抜金額</th>
+                  <th style="width:6%; text-align:center;">削除</th>
                 </tr>
               </thead>
-              <tbody id="itemsTbody">
-                <tr>
-                  <td colspan="8" class="muted">商品がありません</td>
-                </tr>
-              </tbody>
+              <tbody id="itemsTbody"></tbody>
             </table>
           </div>
 
-          <div class="sticky-actions" style="margin-top:14px; border-radius:12px;">
-            <div class="left">
-              <button class="btn primary" id="btnSubtotal" type="button">小計更新</button>
-            </div>
-            <div class="right">
-              <span class="muted" style="font-size:12px;">小計を更新してから会計 → レシート番号入力 → 登録</span>
-            </div>
+          <div style="margin-top:12px;" class="notice warn" id="staleNotice" hidden>
+            明細が更新されました。小計は未更新です（小計ボタンを押してください）。
+          </div>
+        </div>
+
+        <div class="sticky-actions">
+          <div class="left">
+            <button class="btn primary" id="btnSubtotal" type="button">小計（税率別）</button>
+          </div>
+          <div class="right">
+            <span class="muted" style="font-size:12px;">※税額は「税率別税抜小計」×税率 を1円未満切り上げ</span>
           </div>
         </div>
       </div>
 
       <div class="card">
         <div class="card-h">
-          <h2>小計</h2>
-          <span class="muted" style="font-size:12px;">（税率別に集計）</span>
+          <h2>小計・登録</h2>
         </div>
+
         <div class="card-b">
-          <div class="summary">
+          <div class="summary" style="margin-bottom:14px;">
             <div class="sum-block">
-              <div class="sum-title">10%対象</div>
-              <div class="sum-row"><span>税抜</span><strong class="mono" id="excl10">0</strong></div>
-              <div class="sum-row"><span>税</span><strong class="mono" id="tax10">0</strong></div>
-              <div class="sum-row"><span>税込</span><strong class="mono" id="incl10">0</strong></div>
-            </div>
-
-            <div class="sum-block">
-              <div class="sum-title">8%対象</div>
-              <div class="sum-row"><span>税抜</span><strong class="mono" id="excl8">0</strong></div>
-              <div class="sum-row"><span>税</span><strong class="mono" id="tax8">0</strong></div>
-              <div class="sum-row"><span>税込</span><strong class="mono" id="incl8">0</strong></div>
-            </div>
-
-            <div class="sum-block">
-              <div class="sum-title">合計（税込）</div>
-              <div class="sum-row"><span>合計</span><strong class="mono" id="totalIncl">0</strong></div>
+              <div class="sum-title">10% 対象</div>
+              <div class="sum-row"><span class="muted">税抜小計</span><span class="mono" id="excl10">0</span></div>
+              <div class="sum-row"><span class="muted">税額（切上げ）</span><span class="mono" id="tax10">0</span></div>
               <div class="divider"></div>
-              <div class="muted" style="font-size:12px;">
-                ※ 税は税率ごとに税抜合計に対して「切り上げ」で計算
-              </div>
+              <div class="sum-row"><strong>税込小計</strong><strong class="mono" id="incl10">0</strong></div>
+            </div>
+
+            <div class="sum-block">
+              <div class="sum-title">8% 対象</div>
+              <div class="sum-row"><span class="muted">税抜小計</span><span class="mono" id="excl8">0</span></div>
+              <div class="sum-row"><span class="muted">税額（切上げ）</span><span class="mono" id="tax8">0</strong></div>
+              <div class="divider"></div>
+              <div class="sum-row"><strong>税込小計</strong><strong class="mono" id="incl8">0</strong></div>
+            </div>
+
+            <div class="sum-block" style="border-color: rgba(37,99,235,.25); background: rgba(37,99,235,.06);">
+              <div class="sum-row"><strong>合計（税込）</strong><strong class="mono" id="totalIncl">0</strong></div>
             </div>
           </div>
 
-          <div class="divider" style="margin:14px 0;"></div>
-
-          <div class="row" style="margin-bottom:10px;">
-            <div class="field">
-              <div class="label">レシート番号（決済端末の番号を入力）</div>
-              <input id="receiptNo" type="text" autocomplete="off" placeholder="例：T1 / 12345 など" />
-            </div>
+          <div class="field" style="margin-bottom:10px;">
+            <div class="label">レシート番号を入力（同日に同じレシート番号は登録不可）</div>
+            <input id="receiptNo" type="text" autocomplete="off" placeholder="決済レシート番号を入力（半角英数）" />
           </div>
 
           <div class="notice" style="margin-bottom:10px;">
@@ -573,94 +504,6 @@
     const elRegNotice = document.getElementById("regNotice");
 
     // =========================
-    // Simple Login (Password Gate)
-    // =========================
-    const AUTH = {
-      pass: "7532",
-      storageKey: "pos_simple_auth_until",
-      ttlMs: 30 * 24 * 60 * 60 * 1000
-    };
-
-    const elAuthOverlay = document.getElementById("authOverlay");
-    const elAuthPass = document.getElementById("authPass");
-    const elAuthBtn = document.getElementById("authBtn");
-    const elAuthErr = document.getElementById("authErr");
-
-    function isAuthed(){
-      try{
-        const untilStr = localStorage.getItem(AUTH.storageKey);
-        const until = untilStr ? Number(untilStr) : 0;
-        return Number.isFinite(until) && until > Date.now();
-      }catch(e){
-        return false;
-      }
-    }
-
-    function setAuthed(){
-      try{
-        const until = Date.now() + AUTH.ttlMs;
-        localStorage.setItem(AUTH.storageKey, String(until));
-      }catch(e){}
-    }
-
-    function showAuth(){
-      if (!elAuthOverlay) return;
-      elAuthOverlay.hidden = false;
-      if (elAuthErr) elAuthErr.hidden = true;
-      if (elAuthPass){
-        elAuthPass.value = "";
-        setTimeout(() => {
-          try{ elAuthPass.focus(); }catch(e){}
-        }, 0);
-      }
-    }
-
-    function hideAuth(){
-      if (!elAuthOverlay) return;
-      elAuthOverlay.hidden = true;
-      if (elAuthErr) elAuthErr.hidden = true;
-    }
-
-    let appStarted = false;
-    function startApp(){
-      if (appStarted) return;
-      appStarted = true;
-
-      updateNetworkBadge();
-      tick();
-      setInterval(tick, 1000);
-
-      resetAll(true);
-      setNotice("", "初期化中...");
-      loadCashiers().finally(() => setTimeout(() => keepFocus(), 200));
-    }
-
-    function bindAuthEvents(){
-      if (!elAuthBtn || !elAuthPass) return;
-
-      const tryLogin = () => {
-        const v = (elAuthPass.value || "").trim();
-        if (v === AUTH.pass){
-          setAuthed();
-          hideAuth();
-          startApp();
-          return;
-        }
-        if (elAuthErr) elAuthErr.hidden = false;
-        elAuthPass.focus();
-        elAuthPass.select();
-      };
-
-      elAuthBtn.addEventListener("click", tryLogin);
-      elAuthPass.addEventListener("keydown", (e) => {
-        if (e.key === "Enter"){
-          e.preventDefault();
-          tryLogin();
-        }
-      });
-    }
-
-    // =========================
     // JST utils (常にAsia/Tokyoでフォーマットする)
     //  - 端末のローカルTZやDSTの影響を受けない
     //  - 出力は "YYYY-MM-DD HH:mm:ss"
@@ -697,228 +540,240 @@
       elRegNotice.className = "notice" + (type ? ` ${type}` : "");
       elRegNotice.textContent = text;
     }
-
-    function money(n){
-      const v = Number(n || 0);
-      return v.toLocaleString("ja-JP");
-    }
-
-    function updateNetworkBadge(){
-      const on = navigator.onLine;
-      elNetDot.className = "dot " + (on ? "ok" : "ng");
-      elNetText.textContent = on ? "ONLINE" : "OFFLINE";
+    function money(n){ return (n ?? 0).toLocaleString("ja-JP"); }
+    function escapeHtml(s){
+      return String(s).replace(/[&<>"']/g, (c) => ({
+        "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+      }[c]));
     }
 
     function markSubtotalStale(){
       state.subtotalFresh = false;
       elStaleNotice.hidden = false;
-      elCalcState.textContent = "小計が古い可能性";
-      elCalcState.className = "muted";
+      elCalcState.textContent = "小計未更新";
     }
 
     function markSubtotalFresh(){
       state.subtotalFresh = true;
       elStaleNotice.hidden = true;
       elCalcState.textContent = "小計OK";
-      elCalcState.className = "";
+    }
+
+    function updateNetworkBadge(){
+      const online = navigator.onLine;
+      elNetDot.classList.toggle("ok", online);
+      elNetDot.classList.toggle("ng", !online);
+      elNetText.textContent = online ? "オンライン" : "オフライン";
     }
 
     function sanitizeReceiptForTx(receiptNo){
-      // txIdの可読性と安全のため、英数-_のみ残す（その他は_）
-      return String(receiptNo || "").trim().replace(/[^0-9A-Za-z_-]/g, "_").slice(0, 40);
+      return String(receiptNo || "").trim().replace(/[^A-Za-z0-9_-]/g, "_");
     }
 
     function updateTxIdPreview(){
-      const receiptNo = (elReceiptNo.value || "").trim();
-      if (!receiptNo){
+      const r = sanitizeReceiptForTx(elReceiptNo.value);
+      if (!r) {
         elTxId.textContent = "----";
         return;
       }
-      const ymd = yyyymmddFromRegisteredAtJst(formatNowJst());
-      elTxId.textContent = `${ymd}_${sanitizeReceiptForTx(receiptNo)}`;
+      const registeredAtJst = formatNowJst();
+      const ymd = yyyymmddFromRegisteredAtJst(registeredAtJst);
+      elTxId.textContent = `${ymd}_${r}`;
     }
 
     // =========================
     // API helpers
     // =========================
     async function apiGetJson(url){
-      const res = await fetch(url, { method:"GET", headers: { "Accept":"application/json" } });
-      if (!res.ok) throw new Error(`GET ${url} -> ${res.status}`);
+      const res = await fetch(url, { method:"GET", headers:{ "Accept":"application/json" } });
+      if (!res.ok){
+        const t = await res.text().catch(()=> "");
+        throw new Error(`GET ${url} failed: ${res.status} ${t}`);
+      }
       return await res.json();
     }
 
     async function apiPostJson(url, body){
       const res = await fetch(url, {
         method:"POST",
-        headers: { "Content-Type":"application/json", "Accept":"application/json" },
+        headers:{ "Content-Type":"application/json", "Accept":"application/json" },
         body: JSON.stringify(body)
       });
-      const txt = await res.text();
+      const dataText = await res.text().catch(()=> "");
       let data = null;
-      try{ data = txt ? JSON.parse(txt) : null; }catch(e){}
+      try { data = dataText ? JSON.parse(dataText) : null; } catch(e) {}
       if (!res.ok){
-        const msg = (data && (data.error || data.message)) ? (data.error || data.message) : `${res.status} ${res.statusText}`;
-        throw new Error(msg);
+        const msg = (data && data.error) ? data.error : dataText || `HTTP ${res.status}`;
+        const err = new Error(msg);
+        err.status = res.status;
+        err.data = data;
+        throw err;
       }
       return data;
     }
 
     // =========================
-    // Load cashiers
+    // Cashiers
     // =========================
     async function loadCashiers(){
       try{
-        const list = await apiGetJson(API.cashiers);
-        const names = Array.isArray(list) ? list : (list && list.cashiers) ? list.cashiers : [];
-        elCashierName.innerHTML = `<option value="">選択してください</option>` + names.map(n => `<option value="${String(n).replace(/"/g,'&quot;')}">${String(n)}</option>`).join("");
-        setNotice("ok", "準備OK。バーコードをスキャンしてください。");
-      }catch(e){
-        elCashierName.innerHTML = `<option value="">読み込み失敗</option>`;
-        setNotice("err", "レジ担当者の読み込みに失敗しました。API /api/cashiers を確認してください。");
+        const data = await apiGetJson(API.cashiers);
+        const names = (data.cashiers || []).map(x => x.cashier_name).filter(Boolean);
+        if (names.length === 0){
+          elCashierName.innerHTML = `<option value="">（従業員が未登録）</option>`;
+          setNotice("warn", "従業員マスタが空です。先に従業員を登録してください。");
+          return;
+        }
+        elCashierName.innerHTML = `<option value="">選択してください</option>` + names.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join("");
+        setNotice("", "準備完了。バーコードをスキャンしてください。");
+      } catch(e){
+        elCashierName.innerHTML = `<option value="">（読込失敗）</option>`;
+        setNotice("err", "従業員マスタの読み込みに失敗しました。API/DB設定を確認してください。");
       }
     }
 
     // =========================
-    // Fetch product
+    // Product lookup
     // =========================
     async function fetchProductByCode(code){
-      const url = API.productByCode(code);
-      const data = await apiGetJson(url);
-      // data could be object or {product:...}
-      const p = data && data.product ? data.product : data;
-      if (!p) return null;
-
-      // normalize
-      const taxRate = Number(p.tax_rate ?? p.taxRate ?? 10);
-      const priceExcl = Number(p.price_excl ?? p.priceExcl ?? 0);
-      const posCost = (p.pos_cost == null && p.posCost == null) ? null : Number(p.pos_cost ?? p.posCost);
-
-      return {
-        product_code: String(p.product_code ?? p.code ?? code),
-        product_category: String(p.product_category ?? p.category ?? ""),
-        product_name: String(p.product_name ?? p.name ?? ""),
-        pos_cost: (posCost == null || Number.isNaN(posCost)) ? null : posCost,
-        price_excl: Number.isFinite(priceExcl) ? priceExcl : 0,
-        tax_rate: (taxRate === 8 || taxRate === 10) ? taxRate : 10,
-      };
+      const data = await apiGetJson(API.productByCode(code));
+      return data.product || null;
     }
 
     // =========================
-    // Items handling
+    // Items
     // =========================
     function upsertItem(product){
       const code = product.product_code;
       const existing = state.itemsByCode.get(code);
+
       if (existing){
         existing.qty += 1;
         existing.line_amount_excl = existing.price_excl * existing.qty;
-        state.itemsByCode.set(code, existing);
+        state.lastAddedText = `${existing.product_name}（数量 ${existing.qty}）`;
       } else {
-        const item = {
+        const qty = 1;
+        const it = {
           product_code: product.product_code,
-          product_category: product.product_category,
+          product_category: product.product_category || "",
           product_name: product.product_name,
-          pos_cost: product.pos_cost,
-          price_excl: product.price_excl,
-          tax_rate: product.tax_rate,
-          qty: 1,
-          line_amount_excl: product.price_excl,
+          pos_cost: product.pos_cost == null ? null : (Number(product.pos_cost) | 0),
+          price_excl: (Number(product.price_excl) | 0),
+          tax_rate: Number(product.tax_rate) === 8 ? 8 : 10,
+          qty: qty,
+          line_amount_excl: (Number(product.price_excl) | 0) * qty,
         };
-        state.itemsByCode.set(code, item);
+        state.itemsByCode.set(code, it);
+        state.lastAddedText = `${it.product_name}（数量 1）`;
       }
 
-      state.lastAddedText = `${product.product_code} / ${product.product_name}`;
       elLastAdded.textContent = state.lastAddedText;
-
-      markSubtotalStale();
       renderItems();
-    }
-
-    function deleteItem(code){
-      state.itemsByCode.delete(code);
       markSubtotalStale();
-      renderItems();
     }
 
     function setQty(code, qty){
       const it = state.itemsByCode.get(code);
       if (!it) return;
-      const q = Math.max(1, Math.min(999, Math.floor(Number(qty || 1))));
+      const q = Math.max(1, qty | 0);
       it.qty = q;
       it.line_amount_excl = it.price_excl * it.qty;
-      state.itemsByCode.set(code, it);
-      markSubtotalStale();
+
+      state.lastAddedText = `${it.product_name}（数量 ${it.qty}）`;
+      elLastAdded.textContent = state.lastAddedText;
       renderItems();
+      markSubtotalStale();
+    }
+
+    function incQty(code){ setQty(code, (state.itemsByCode.get(code)?.qty || 1) + 1); }
+    function decQty(code){ setQty(code, (state.itemsByCode.get(code)?.qty || 1) - 1); }
+
+    function removeItem(code){
+      const it = state.itemsByCode.get(code);
+      if (!it) return;
+      state.itemsByCode.delete(code);
+      state.lastAddedText = `${it.product_name} を削除`;
+      elLastAdded.textContent = state.lastAddedText;
+      renderItems();
+      markSubtotalStale();
     }
 
     function renderItems(){
       const items = Array.from(state.itemsByCode.values());
+
       if (items.length === 0){
-        elItemsTbody.innerHTML = `<tr><td colspan="8" class="muted">商品がありません</td></tr>`;
+        elItemsTbody.innerHTML = `
+          <tr>
+            <td colspan="6" class="muted" style="padding:14px;">
+              まだ商品がありません。バーコードをスキャンしてください。
+            </td>
+          </tr>
+        `;
         return;
       }
 
-      // sort by latest added not tracked; keep insertion order via Map
       elItemsTbody.innerHTML = items.map(it => {
-        const cost = (it.pos_cost == null) ? "" : money(it.pos_cost);
+        const taxLabel = it.tax_rate === 8 ? "8%" : "10%";
+        const sub = it.product_category ? ` <span class="muted">/ ${escapeHtml(it.product_category)}</span>` : "";
         return `
-          <tr>
-            <td class="mono">${it.product_code}</td>
-            <td>${it.product_name}</td>
-            <td>${it.tax_rate}%</td>
+          <tr data-code="${escapeHtml(it.product_code)}">
+            <td>
+              <div style="display:flex; flex-direction:column; gap:2px;">
+                <div style="font-weight:700;">${escapeHtml(it.product_name)}${sub}</div>
+                <div class="muted mono" style="font-size:12px;">${escapeHtml(it.product_code)}</div>
+              </div>
+            </td>
+            <td class="mono">${taxLabel}</td>
             <td class="right mono">${money(it.price_excl)}</td>
-            <td class="right mono">${cost}</td>
             <td>
               <div class="qty">
-                <button class="btn small" type="button" data-act="dec" data-code="${it.product_code}">-</button>
-                <input class="mono" type="number" min="1" max="999" step="1" value="${it.qty}" data-act="qty" data-code="${it.product_code}" />
-                <button class="btn small" type="button" data-act="inc" data-code="${it.product_code}">+</button>
+                <button class="btn small icon" type="button" data-act="dec" title="数量を減らす">−</button>
+                <input class="mono" type="number" min="1" step="1" inputmode="numeric" data-act="qty" value="${it.qty}">
+                <button class="btn small icon" type="button" data-act="inc" title="数量を増やす">＋</button>
               </div>
             </td>
             <td class="right mono">${money(it.line_amount_excl)}</td>
-            <td>
-              <button class="btn danger small" type="button" data-act="del" data-code="${it.product_code}">削除</button>
+            <td style="text-align:center;">
+              <button class="btn small danger" type="button" data-act="del" title="削除">🗑</button>
             </td>
           </tr>
         `;
       }).join("");
 
-      // bind events inside tbody (delegate)
-      elItemsTbody.querySelectorAll("[data-act]").forEach(el => {
-        const act = el.getAttribute("data-act");
-        const code = el.getAttribute("data-code");
-        if (!act || !code) return;
+      elItemsTbody.querySelectorAll("tr").forEach(tr => {
+        const code = tr.getAttribute("data-code");
 
-        if (act === "del"){
-          el.addEventListener("click", () => deleteItem(code));
-        } else if (act === "inc"){
-          el.addEventListener("click", () => {
-            const it = state.itemsByCode.get(code);
-            if (!it) return;
-            setQty(code, it.qty + 1);
-          });
-        } else if (act === "dec"){
-          el.addEventListener("click", () => {
-            const it = state.itemsByCode.get(code);
-            if (!it) return;
-            setQty(code, Math.max(1, it.qty - 1));
-          });
-        } else if (act === "qty"){
-          el.addEventListener("change", () => setQty(code, el.value));
-          el.addEventListener("blur", () => setQty(code, el.value));
-        }
+        tr.querySelector('[data-act="inc"]').addEventListener("click", () => { incQty(code); keepFocus(); });
+        tr.querySelector('[data-act="dec"]').addEventListener("click", () => { decQty(code); keepFocus(); });
+        tr.querySelector('[data-act="del"]').addEventListener("click", () => { removeItem(code); keepFocus(); });
+
+        const qtyInput = tr.querySelector('[data-act="qty"]');
+        qtyInput.addEventListener("change", () => {
+          const v = Number(qtyInput.value);
+          setQty(code, Number.isFinite(v) ? v : 1);
+          keepFocus();
+        });
+        qtyInput.addEventListener("focus", () => {
+          try{ qtyInput.select(); }catch(e){}
+        });
       });
     }
 
     // =========================
-    // Subtotal / Tax
+    // Subtotal
+    // 税額: 税率別税抜小計 × 税率 を1円未満切り上げ
     // =========================
-    function calcTaxCeil(excl, rate){
-      return Math.ceil(excl * rate / 100);
+    function calcTaxCeil(subtotalExcl, taxRate){
+      return Math.ceil((subtotalExcl * taxRate) / 100);
     }
 
     function runSubtotal(){
       const items = Array.from(state.itemsByCode.values());
+      if (items.length === 0){
+        setNotice("warn", "商品がありません。スキャンしてください。");
+        return;
+      }
+
       const excl8 = items.filter(i => i.tax_rate === 8).reduce((a,b)=>a+b.line_amount_excl, 0);
       const excl10 = items.filter(i => i.tax_rate === 10).reduce((a,b)=>a+b.line_amount_excl, 0);
 
@@ -1255,14 +1110,13 @@
     // =========================
     // Init
     // =========================
-    bindAuthEvents();
+    updateNetworkBadge();
+    tick();
+    setInterval(tick, 1000);
 
-    if (isAuthed()) {
-      hideAuth();
-      startApp();
-    } else {
-      showAuth();
-    }
+    resetAll(true);
+    setNotice("", "初期化中...");
+    loadCashiers().finally(() => setTimeout(() => keepFocus(), 200));
   </script>
 </body>
 </html>
