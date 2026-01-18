@@ -19,7 +19,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
   const header = await env.DB.prepare(
     `SELECT
-      transaction_id, yyyymmdd, receipt_no, registered_at_jst,
+      transaction_id, yyyymmdd, receipt_no, registered_at_utc, registered_at_jst,
       subtotal_excl_8, tax_8, subtotal_incl_8,
       subtotal_excl_10, tax_10, subtotal_incl_10,
       total_incl
@@ -41,6 +41,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     receipt: {
       transaction_id: header.transaction_id,
       receipt_no: header.receipt_no,
+      registered_at_utc: header.registered_at_utc,
       registered_at_jst: header.registered_at_jst,
       items,
       tax_summary: [

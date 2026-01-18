@@ -3,7 +3,8 @@ import {
   json,
   optionsOk,
   nowUtcIso,
-  yyyymmddFromRegisteredAtJst,
+  yyyymmddFromUtcIso,
+  formatJstDateTimeFromUtcIso,
   calcTaxCeil,
   asNonEmptyString,
   asInt,
@@ -23,7 +24,7 @@ type ItemIn = {
 
 type BodyIn = {
   receipt_no: string;
-  registered_at_jst: string; // "YYYY-MM-DD HH:mm:ss" (JST)
+  // registered_at_utc はサーバー側のUTC時刻を正とするため、クライアントからは送らない
   cashier_name: string;
   items: ItemIn[];
 };
@@ -43,14 +44,16 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
   try {
     const receiptNo = asNonEmptyString(body.receipt_no, "receipt_no");
-    const registeredAtJst = asNonEmptyString(body.registered_at_jst, "registered_at_jst");
     const cashierName = asNonEmptyString(body.cashier_name, "cashier_name");
+
+    const registeredAtUtc = nowUtcIso();
+    const registeredAtJst = formatJstDateTimeFromUtcIso(registeredAtUtc);
 
     if (!Array.isArray(body.items) || body.items.length === 0) {
       throw new Error("items must be a non-empty array");
     }
 
-    const yyyymmdd = yyyymmddFromRegisteredAtJst(registeredAtJst);
+    const yyyymmdd = yyyymmddFromUtcIso(registeredAtUtc);
     const safeReceipt = sanitizeReceiptNo(receiptNo);
     const transactionId = `${yyyymmdd}_${safeReceipt}`;
 
@@ -111,14 +114,14 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     stmts.push(
       env.DB.prepare(
         `INSERT INTO transactions (
-          transaction_id, yyyymmdd, receipt_no, registered_at_jst, cashier_name,
+          transaction_id, yyyymmdd, receipt_no, registered_at_utc, registered_at_jst, cashier_name,
           total_incl,
           subtotal_excl_8, tax_8, subtotal_incl_8,
           subtotal_excl_10, tax_10, subtotal_incl_10,
           created_at_utc
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).bind(
-        transactionId, yyyymmdd, receiptNo, registeredAtJst, cashierName,
+        transactionId, yyyymmdd, receiptNo, registeredAtUtc, registeredAtJst, cashierName,
         totalIncl,
         subtotalExcl8, tax8, subtotalIncl8,
         subtotalExcl10, tax10, subtotalIncl10,
