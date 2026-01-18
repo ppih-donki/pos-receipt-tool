@@ -305,18 +305,6 @@
       .btn{ width:100%; }
       .btn.icon{ width:44px; }
     }
-
-    /* Modal */
-    .modal{ position:fixed; inset:0; display:flex; align-items:center; justify-content:center; z-index:2000; }
-    .modal-backdrop{ position:absolute; inset:0; background:rgba(0,0,0,.35); }
-    .modal-card{ position:relative; width:min(520px, calc(100vw - 24px)); background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:14px; box-shadow:0 12px 32px rgba(0,0,0,.18); }
-    .modal-title{ font-weight:800; font-size:16px; margin-bottom:8px; }
-    .modal-body{ font-size:14px; color:var(--fg); line-height:1.6; margin-bottom:12px; }
-    .modal-actions{ display:flex; justify-content:flex-end; }
-    .modal-actions .btn{ width:auto; }
-
-    /* Safety: always hide elements that have the HTML "hidden" attribute */
-    [hidden]{ display:none !important; }
   </style>
 </head>
 
@@ -362,8 +350,8 @@
             </div>
 
             <div style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
-              <button class="btn small" type="button" id="btnAddManual">JAN手入力</button>
-              <button class="btn small" type="button" id="btnFocus">JANスキャン</button>
+              <button class="btn small" type="button" id="btnAddManual">手入力で追加</button>
+              <button class="btn small" type="button" id="btnFocus">入力欄にフォーカス</button>
             </div>
           </div>
 
@@ -447,25 +435,13 @@
 
           <div class="row" style="margin-bottom:10px;">
             <button class="btn primary" id="btnRegister" type="button" style="flex:1;">登録</button>
-            <button class="btn" id="btnDownloadCsv" type="button" style="flex:1;" hidden>オフラインの場合CSVをダウンロード</button>
+            <button class="btn" id="btnDownloadCsv" type="button" style="flex:1;" hidden>CSVをダウンロード</button>
           </div>
 
           <div class="notice" id="regNotice">
-            送信失敗時はCSVダウンロードが表示されます
+            登録に成功すると、明細がクリアされ次の会計に進みます。送信失敗時はCSVダウンロードが表示されます。
           </div>
         </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Success modal -->
-  <div id="successModal" class="modal" hidden>
-    <div class="modal-backdrop" id="successModalBackdrop"></div>
-    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="successModalTitle">
-      <div class="modal-title" id="successModalTitle">登録完了</div>
-      <div class="modal-message" id="successModalMessage"></div>
-      <div class="modal-actions">
-        <button class="btn primary" type="button" id="successModalOk">OK</button>
       </div>
     </div>
   </div>
@@ -527,62 +503,31 @@
     const elBtnDownloadCsv = document.getElementById("btnDownloadCsv");
     const elRegNotice = document.getElementById("regNotice");
 
-    const elSuccessModal = document.getElementById("successModal");
-    const elSuccessModalBackdrop = document.getElementById("successModalBackdrop");
-    const elSuccessModalMessage = document.getElementById("successModalMessage");
-    const elSuccessModalOk = document.getElementById("successModalOk");
-
-    // Always start with the modal closed (defensive against stale DOM state / partial JS execution)
-    if (elSuccessModal) elSuccessModal.hidden = true;
-    if (elSuccessModalBackdrop) elSuccessModalBackdrop.hidden = true;
-
     // =========================
-    // JST/UTC time utils (timezone-stable)
+    // JST utils (local timezoneに依存せず +09:00 固定)
     // =========================
     function pad2(n){ return String(n).padStart(2,"0"); }
-
-    function getNowUtcIso(){
-      return new Date().toISOString();
+    function getNowJstDate(){
+      const now = new Date();
+      const utcMs = now.getTime() + (now.getTimezoneOffset() * 60000);
+      const jstMs = utcMs + (9 * 60 * 60000);
+      return new Date(jstMs);
     }
-
-    function getJstParts(dt){
-      const parts = new Intl.DateTimeFormat("en-CA", {
-        timeZone: "Asia/Tokyo",
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-        hour12: false
-      }).formatToParts(dt);
-      const get = (t) => (parts.find(p => p.type === t)?.value ?? "");
-      return {
-        year: get("year"),
-        month: get("month"),
-        day: get("day"),
-        hour: get("hour"),
-        minute: get("minute"),
-        second: get("second")
-      };
+    function formatJstDateTime(dt){
+      const y = dt.getUTCFullYear();
+      const m = pad2(dt.getUTCMonth() + 1);
+      const d = pad2(dt.getUTCDate());
+      const hh = pad2(dt.getUTCHours());
+      const mm = pad2(dt.getUTCMinutes());
+      const ss = pad2(dt.getUTCSeconds());
+      return `${y}-${m}-${d} ${hh}:${mm}:${ss}`;
     }
-
-    function formatNowJstDateTime(){
-      const p = getJstParts(new Date());
-      return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}:${p.second}`;
-    }
-
-    function yyyymmddNowJst(){
-      const p = getJstParts(new Date());
-      return `${p.year}${p.month}${p.day}`;
-    }
-
     function yyyymmddFromRegisteredAtJst(registeredAtJst){
       // "YYYY-MM-DD HH:mm:ss" -> "YYYYMMDD"
       return registeredAtJst.slice(0,4) + registeredAtJst.slice(5,7) + registeredAtJst.slice(8,10);
     }
 
-// =========================
+    // =========================
     // UI helpers
     // =========================
     function setNotice(type, text){
@@ -592,16 +537,6 @@
     function setRegNotice(type, text){
       elRegNotice.className = "notice" + (type ? ` ${type}` : "");
       elRegNotice.textContent = text;
-    }
-
-    function showSuccessModal(receiptNo){
-      if (!elSuccessModal) return;
-      elSuccessModalMessage.textContent = `レシートNo${receiptNo}のデータを登録しました`;
-      elSuccessModal.hidden = false;
-    }
-    function hideSuccessModal(){
-      if (!elSuccessModal) return;
-      elSuccessModal.hidden = true;
     }
     function money(n){ return (n ?? 0).toLocaleString("ja-JP"); }
     function escapeHtml(s){
@@ -639,7 +574,8 @@
         elTxId.textContent = "----";
         return;
       }
-      const ymd = yyyymmddNowJst();
+      const registeredAtJst = formatJstDateTime(getNowJstDate());
+      const ymd = yyyymmddFromRegisteredAtJst(registeredAtJst);
       elTxId.textContent = `${ymd}_${r}`;
     }
 
@@ -875,7 +811,6 @@
 
       const header = [
         "registered_at_jst",
-        "registered_at_utc",
         "receipt_no",
         "transaction_id",
         "cashier_name",
@@ -985,29 +920,30 @@
       if (!state.subtotalFresh){
         runSubtotal();
       }
+      const createdAtUtc = new Date().toISOString();
+      const registeredAtJst = formatJstDateTime(getNowJstDate());
+      const yyyymmdd = yyyymmddFromRegisteredAtJst(registeredAtJst);
 
-      const ymd = yyyymmddNowJst();
-      const txId = `${ymd}_${sanitizeReceiptForTx(receiptNo)}`;
-
-      // DB保存はUTCを正、表示はJSTへ変換
-      const registeredAtJst = formatNowJstDateTime();
-      const registeredAtUtc = getNowUtcIso();
+      const receiptNo = (elReceiptNo.value || "").trim();
+      const txId = `${yyyymmdd}_${sanitizeReceiptForTx(receiptNo)}`;
+      const s = state.subtotal;
 
       const payload = {
         transaction_id: txId,
-        yyyymmdd: ymd,
-        registered_at_jst: registeredAtJst,
-        created_at_utc: registeredAtUtc,
+        yyyymmdd,
         receipt_no: receiptNo,
-                cashier_name: cashierName,
-        total_incl: totals.totalIncl,
-        subtotal_excl_8: totals.subtotalExcl8,
-        tax_8: totals.tax8,
-        subtotal_incl_8: totals.subtotalIncl8,
-        subtotal_excl_10: totals.subtotalExcl10,
-        tax_10: totals.tax10,
-        subtotal_incl_10: totals.subtotalIncl10,
-        items: items.map(it => ({
+        registered_at_jst: registeredAtJst,
+        cashier_name: cashierName,
+        total_incl: s.totalIncl,
+        subtotal_excl_8: s.excl8,
+        tax_8: s.tax8,
+        subtotal_incl_8: s.incl8,
+        subtotal_excl_10: s.excl10,
+        tax_10: s.tax10,
+        subtotal_incl_10: s.incl10,
+        created_at_utc: createdAtUtc,
+        items: state.items.map(it => ({
+          transaction_id: txId,
           product_code: it.product_code,
           product_category: it.product_category,
           product_name: it.product_name,
@@ -1016,13 +952,14 @@
           qty: it.qty,
           line_amount_excl: it.price_excl * it.qty,
           tax_rate: it.tax_rate,
-          created_at_utc: registeredAtUtc
+          created_at_utc: createdAtUtc
         }))
       };
 
+
       // Offline -> CSV
       if (!navigator.onLine){
-        const csv = buildCsvText(registeredAtJst, registeredAtUtc, receiptNo, txId, cashierName);
+        const csv = buildCsvText(registeredAtJst, receiptNo, txId, cashierName);
         showCsvFallback(txId, csv);
         setRegNotice("err", "送信できません（オフライン）。CSVをダウンロードして保管してください。");
         return;
@@ -1038,10 +975,9 @@
         setRegNotice("ok", `登録しました：${res.transaction_id}`);
         resetAll(true);
         keepFocus();
-        showSuccessModal(receiptNo);
       } catch(e){
         const msg = e && e.message ? e.message : "登録に失敗しました";
-        const csv = buildCsvText(registeredAtJst, registeredAtUtc, receiptNo, txId, cashierName);
+        const csv = buildCsvText(registeredAtJst, receiptNo, txId, cashierName);
         showCsvFallback(txId, csv);
         setRegNotice("err", `登録に失敗しました。CSVをダウンロードしてください。エラー：${msg}`);
       } finally {
@@ -1124,7 +1060,7 @@
       updateTxIdPreview();
 
       elBtnDownloadCsv.hidden = true;
-      setRegNotice("", "送信失敗時はCSVダウンロードが表示されます");
+      setRegNotice("", "登録に成功すると、明細がクリアされ次の会計に進みます。送信失敗時はCSVダウンロードが表示されます。");
 
       elStaleNotice.hidden = true;
       elCalcState.textContent = "小計未実行";
@@ -1168,9 +1104,6 @@
       keepFocus();
     });
 
-    elSuccessModalBackdrop.addEventListener("click", () => hideSuccessModal());
-    elSuccessModalOk.addEventListener("click", () => hideSuccessModal());
-
     elBtnClear.addEventListener("click", () => {
       const ok = confirm("この会計の内容をすべてクリアします。よろしいですか？");
       if (!ok) return;
@@ -1185,7 +1118,8 @@
     window.addEventListener("offline", () => { updateNetworkBadge(); });
 
     function tick(){
-      elNowJst.textContent = formatNowJstDateTime();
+      const j = getNowJstDate();
+      elNowJst.textContent = formatJstDateTime(j);
       updateTxIdPreview();
     }
 
