@@ -3,6 +3,7 @@ import {
   json,
   optionsOk,
   nowUtcIso,
+  utcIsoFromRegisteredAtJst,
   yyyymmddFromRegisteredAtJst,
   calcTaxCeil,
   asNonEmptyString,
@@ -106,6 +107,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     const totalExcl = subtotalExcl8 + subtotalExcl10;
 
     const createdAtUtc = nowUtcIso();
+    const registeredAtUtc = utcIsoFromRegisteredAtJst(registeredAtJst);
 
     // Prevent duplicates
     const exists = await env.DB.prepare(
@@ -164,11 +166,11 @@ export const onRequest: PagesFunction<Env> = async (context) => {
       txVals.splice(idx + 1, 0, totalExcl);
     }
 
-    // If the schema has registered_at_utc, store UTC machine time (createdAtUtc)
+    // If the schema has registered_at_utc, store the transaction time in UTC derived from registered_at_jst
     if (colNames.has("registered_at_utc")) {
       const insertAfter = txCols.indexOf("receipt_no");
       txCols.splice(insertAfter + 1, 0, "registered_at_utc");
-      txVals.splice(insertAfter + 1, 0, createdAtUtc);
+      txVals.splice(insertAfter + 1, 0, registeredAtUtc);
     }
 
     const placeholders = txCols.map(() => "?").join(", ");
