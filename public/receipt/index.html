@@ -176,7 +176,7 @@
           throw new Error(msg);
         }
         if (!data || !data.receipt){
-          throw new Error("見つかりませんでした。");
+          throw new Error("見つかりませんでした、日付とレシート番号を確認してください");
         }
 
         const r = data.receipt;
@@ -323,7 +323,7 @@
         elOut.hidden = false;
         setNotice("", "見つかりました。");
       } catch(e){
-        setNotice("err", `見つかりません / エラー: ${e && e.message ? e.message : "unknown"}`);
+        setNotice("err", `見つかりません、日付とレシート番号を確認してください / エラー: ${e && e.message ? e.message : "unknown"}`);
         elOut.hidden = true;
       }
     }
