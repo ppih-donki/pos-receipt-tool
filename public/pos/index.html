@@ -311,7 +311,7 @@
     .modal-backdrop{ position:absolute; inset:0; background:rgba(0,0,0,.35); }
     .modal-card{ position:relative; width:min(520px, calc(100vw - 24px)); background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:14px; box-shadow:0 12px 32px rgba(0,0,0,.18); }
     .modal-title{ font-weight:800; font-size:16px; margin-bottom:8px; }
-    .modal-message{ font-size:14px; color:var(--fg); line-height:1.6; margin-bottom:12px; }
+    .modal-body{ font-size:14px; color:var(--fg); line-height:1.6; margin-bottom:12px; }
     .modal-actions{ display:flex; justify-content:flex-end; }
     .modal-actions .btn{ width:auto; }
   </style>
@@ -434,7 +434,7 @@
           </div>
 
           <div class="field" style="margin-bottom:10px;">
-            <div class="label">レシート番号（必須）※同日に同一のレシート番号は登録不可</div>
+            <div class="label">レシート番号（必須）</div>
             <input id="receiptNo" type="text" autocomplete="off" placeholder="決済レシート番号を入力" />
           </div>
 
@@ -530,29 +530,52 @@
     const elSuccessModalOk = document.getElementById("successModalOk");
 
     // =========================
-    // JST utils (local timezoneに依存せず +09:00 固定)
+    // JST/UTC time utils (timezone-stable)
     // =========================
     function pad2(n){ return String(n).padStart(2,"0"); }
-    function getNowJstDate(){
-      const now = new Date();
-      const utcMs = now.getTime() + (now.getTimezoneOffset() * 60000);
-      const jstMs = utcMs + (9 * 60 * 60000);
-      return new Date(jstMs);
+
+    function getNowUtcIso(){
+      return new Date().toISOString();
     }
-    function formatJstDateTime(dt){
-      const y = dt.getUTCFullYear();
-      const m = pad2(dt.getUTCMonth() + 1);
-      const d = pad2(dt.getUTCDate());
-      const hh = pad2(dt.getUTCHours());
-      const mm = pad2(dt.getUTCMinutes());
-      const ss = pad2(dt.getUTCSeconds());
-      return `${y}-${m}-${d} ${hh}:${mm}:${ss}`;
+
+    function getJstParts(dt){
+      const parts = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Tokyo",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: false
+      }).formatToParts(dt);
+      const get = (t) => (parts.find(p => p.type === t)?.value ?? "");
+      return {
+        year: get("year"),
+        month: get("month"),
+        day: get("day"),
+        hour: get("hour"),
+        minute: get("minute"),
+        second: get("second")
+      };
     }
+
+    function formatNowJstDateTime(){
+      const p = getJstParts(new Date());
+      return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}:${p.second}`;
+    }
+
+    function yyyymmddNowJst(){
+      const p = getJstParts(new Date());
+      return `${p.year}${p.month}${p.day}`;
+    }
+
     function yyyymmddFromRegisteredAtJst(registeredAtJst){
+      // "YYYY-MM-DD HH:mm:ss" -> "YYYYMMDD"
       return registeredAtJst.slice(0,4) + registeredAtJst.slice(5,7) + registeredAtJst.slice(8,10);
     }
 
-    // =========================
+// =========================
     // UI helpers
     // =========================
     function setNotice(type, text){
@@ -564,19 +587,15 @@
       elRegNotice.textContent = text;
     }
 
-    // ===== Modal: hidden だけに頼らず display も強制で切替（復元バグ対策） =====
-    function forceHideSuccessModal(){
-      if (!elSuccessModal) return;
-      elSuccessModal.hidden = true;
-      elSuccessModal.style.display = "none";
-    }
-    function forceShowSuccessModal(receiptNo){
+    function showSuccessModal(receiptNo){
       if (!elSuccessModal) return;
       elSuccessModalMessage.textContent = `レシートNo${receiptNo}のデータを登録しました`;
       elSuccessModal.hidden = false;
-      elSuccessModal.style.display = "flex";
     }
-
+    function hideSuccessModal(){
+      if (!elSuccessModal) return;
+      elSuccessModal.hidden = true;
+    }
     function money(n){ return (n ?? 0).toLocaleString("ja-JP"); }
     function escapeHtml(s){
       return String(s).replace(/[&<>"']/g, (c) => ({
@@ -613,8 +632,7 @@
         elTxId.textContent = "----";
         return;
       }
-      const registeredAtJst = formatJstDateTime(getNowJstDate());
-      const ymd = yyyymmddFromRegisteredAtJst(registeredAtJst);
+      const ymd = yyyymmddNowJst();
       elTxId.textContent = `${ymd}_${r}`;
     }
 
@@ -798,6 +816,7 @@
 
     // =========================
     // Subtotal
+    // 税額: 税率別税抜小計 × 税率 を1円未満切り上げ
     // =========================
     function calcTaxCeil(subtotalExcl, taxRate){
       return Math.ceil((subtotalExcl * taxRate) / 100);
@@ -835,7 +854,7 @@
     }
 
     // =========================
-    // CSV
+    // CSV (offline or failure)
     // =========================
     function csvEscape(v){
       const s = String(v ?? "");
@@ -849,6 +868,7 @@
 
       const header = [
         "registered_at_jst",
+        "registered_at_utc",
         "receipt_no",
         "transaction_id",
         "cashier_name",
@@ -959,14 +979,12 @@
         runSubtotal();
       }
 
-      const registeredAtJst = formatJstDateTime(getNowJstDate());
-      const ymd = yyyymmddFromRegisteredAtJst(registeredAtJst);
+      const ymd = yyyymmddNowJst();
       const txId = `${ymd}_${sanitizeReceiptForTx(receiptNo)}`;
 
       const payload = {
         receipt_no: receiptNo,
-        registered_at_jst: registeredAtJst,
-        cashier_name: cashierName,
+                cashier_name: cashierName,
         items: items.map(it => ({
           product_code: it.product_code,
           product_category: it.product_category,
@@ -978,8 +996,9 @@
         }))
       };
 
+      // Offline -> CSV
       if (!navigator.onLine){
-        const csv = buildCsvText(registeredAtJst, receiptNo, txId, cashierName);
+        const csv = buildCsvText(registeredAtJst, registeredAtUtc, receiptNo, txId, cashierName);
         showCsvFallback(txId, csv);
         setRegNotice("err", "送信できません（オフライン）。CSVをダウンロードして保管してください。");
         return;
@@ -995,10 +1014,10 @@
         setRegNotice("ok", `登録しました：${res.transaction_id}`);
         resetAll(true);
         keepFocus();
-        forceShowSuccessModal(receiptNo);
+        showSuccessModal(receiptNo);
       } catch(e){
         const msg = e && e.message ? e.message : "登録に失敗しました";
-        const csv = buildCsvText(registeredAtJst, receiptNo, txId, cashierName);
+        const csv = buildCsvText(registeredAtJst, registeredAtUtc, receiptNo, txId, cashierName);
         showCsvFallback(txId, csv);
         setRegNotice("err", `登録に失敗しました。CSVをダウンロードしてください。エラー：${msg}`);
       } finally {
@@ -1125,17 +1144,8 @@
       keepFocus();
     });
 
-    if (elSuccessModalBackdrop) elSuccessModalBackdrop.addEventListener("click", () => forceHideSuccessModal());
-    if (elSuccessModalOk) elSuccessModalOk.addEventListener("click", () => forceHideSuccessModal());
-
-    // 重要：復元（bfcache）やリロードでモーダルが開いたまま復活するのを潰す
-    forceHideSuccessModal();
-    window.addEventListener("pageshow", () => {
-      forceHideSuccessModal();
-    });
-    window.addEventListener("load", () => {
-      forceHideSuccessModal();
-    });
+    elSuccessModalBackdrop.addEventListener("click", () => hideSuccessModal());
+    elSuccessModalOk.addEventListener("click", () => hideSuccessModal());
 
     elBtnClear.addEventListener("click", () => {
       const ok = confirm("この会計の内容をすべてクリアします。よろしいですか？");
@@ -1151,8 +1161,7 @@
     window.addEventListener("offline", () => { updateNetworkBadge(); });
 
     function tick(){
-      const j = getNowJstDate();
-      elNowJst.textContent = formatJstDateTime(j);
+      elNowJst.textContent = formatNowJstDateTime();
       updateTxIdPreview();
     }
 
