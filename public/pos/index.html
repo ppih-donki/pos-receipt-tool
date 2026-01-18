@@ -314,6 +314,9 @@
     .modal-body{ font-size:14px; color:var(--fg); line-height:1.6; margin-bottom:12px; }
     .modal-actions{ display:flex; justify-content:flex-end; }
     .modal-actions .btn{ width:auto; }
+
+    /* Safety: always hide elements that have the HTML "hidden" attribute */
+    [hidden]{ display:none !important; }
   </style>
 </head>
 
@@ -528,6 +531,10 @@
     const elSuccessModalBackdrop = document.getElementById("successModalBackdrop");
     const elSuccessModalMessage = document.getElementById("successModalMessage");
     const elSuccessModalOk = document.getElementById("successModalOk");
+
+    // Always start with the modal closed (defensive against stale DOM state / partial JS execution)
+    if (elSuccessModal) elSuccessModal.hidden = true;
+    if (elSuccessModalBackdrop) elSuccessModalBackdrop.hidden = true;
 
     // =========================
     // JST/UTC time utils (timezone-stable)
