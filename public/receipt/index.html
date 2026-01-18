@@ -123,7 +123,7 @@
           <div style="min-width:180px; display:flex; gap:10px;">
             <button class="btn primary" id="btnSearch" type="button" style="flex:1;">検索</button>
           </div>
-        behaves</div>
+        </div>
 
         <div id="msg" class="notice">購入日とレシート番号を入力して検索してください。</div>
       </div>
@@ -386,6 +386,8 @@
       const totalInclFromDecision =
         (tx && Number.isFinite(Number(tx.total_incl))) ? toInt(tx.total_incl, 0) : 0;
 
+      const receiptNo = safeStr(tx && tx.receipt_no);
+
       const lines = [];
 
       // ヘッダ（指定レイアウト固定）
@@ -468,6 +470,8 @@
       lines.push(`事業者登録番号　${BUSINESS_REG_NO}`);
       lines.push("");
       lines.push(`店舗番号　${STORE_NO}`);
+      lines.push("");
+      lines.push(`レシートNo.${receiptNo}`);
 
       return lines.join("\n");
     }
