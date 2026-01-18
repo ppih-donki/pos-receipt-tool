@@ -237,7 +237,8 @@
           const taxRate = Number(it.tax_rate || 0);
           const qty = Number(it.qty || 0);
           const priceExcl = Number(it.price_excl || 0);
-          const unitIncl = priceExcl + Math.ceil(priceExcl * taxRate / 100);
+          const lineExcl = (it.line_amount_excl != null) ? Number(it.line_amount_excl || 0) : (priceExcl * qty);
+          const lineIncl = lineExcl + Math.ceil(lineExcl * taxRate / 100);
           const star = taxRate === 8 ? " *" : "";
           return `
             <div class="rp-sep"></div>
@@ -246,8 +247,8 @@
               <div class="rp-right"></div>
             </div>
             <div class="rp-row mono">
-              <div class="rp-left">${name}</div>
-              <div class="rp-right">¥${money(unitIncl)}${star}</div>
+              <div class="rp-left">${name} x${qty}</div>
+              <div class="rp-right">¥${money(lineIncl)}${star}</div>
             </div>
           `;
         }).join("");
