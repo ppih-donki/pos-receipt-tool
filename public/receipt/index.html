@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="utf-8" />
-  <title>レシート照会</title>
+  <title>レシート確認</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <meta name="robots" content="noindex,nofollow" />
   <style>
@@ -14,20 +14,23 @@
       --border:#e5e7eb;
       --accent:#2563eb;
       --danger:#dc2626;
+      --ok:#059669;
       --shadow: 0 8px 24px rgba(0,0,0,.08);
       --radius:14px;
     }
     *{ box-sizing:border-box; }
     html,body{ margin:0; padding:0; color:var(--fg); background:var(--bg); font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans JP", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif; }
-    .wrap{ max-width:720px; margin:0 auto; padding:14px; }
+    button, input{ font:inherit; }
+    .wrap{ max-width:900px; margin:0 auto; padding:14px; }
     .card{
       background: var(--panel);
       border:1px solid var(--border);
       border-radius: var(--radius);
       box-shadow: var(--shadow);
       overflow:hidden;
+      margin-top:14px;
     }
-    .h{
+    .card-h{
       padding:12px 14px;
       border-bottom:1px solid var(--border);
       display:flex;
@@ -35,12 +38,13 @@
       justify-content:space-between;
       gap:10px;
     }
-    .h h1{ margin:0; font-size:16px; font-weight:800; }
-    .b{ padding:14px; }
-    .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; }
-    .field{ flex:1; min-width:220px; display:flex; flex-direction:column; gap:6px; }
+    .card-h h1{ margin:0; font-size:16px; font-weight:800; }
+    .card-b{ padding:14px; }
+
+    .row{ display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; }
+    .field{ display:flex; flex-direction:column; gap:6px; flex:1; min-width: 220px; }
     .label{ font-size:12px; color:var(--muted); }
-    input{
+    input[type="text"], input[type="date"]{
       width:100%;
       padding:12px 12px;
       border-radius:12px;
@@ -49,6 +53,7 @@
       outline:none;
     }
     input:focus{ border-color: rgba(37,99,235,.5); box-shadow: 0 0 0 4px rgba(37,99,235,.12); }
+
     .btn{
       border:1px solid var(--border);
       background:#fff;
@@ -62,11 +67,9 @@
       user-select:none;
       -webkit-tap-highlight-color: transparent;
     }
-    .btn.primary{
-      background: var(--accent);
-      color:#fff;
-      border-color: rgba(0,0,0,0);
-    }
+    .btn.primary{ background: var(--accent); color:#fff; border-color: rgba(0,0,0,0); }
+    .btn[disabled]{ opacity:.5; cursor:not-allowed; }
+
     .notice{
       border-radius:12px;
       padding:10px 12px;
@@ -74,268 +77,230 @@
       background:#fafafa;
       font-size:13px;
       color:var(--muted);
-      margin-top:12px;
+      margin-top:10px;
+      white-space:pre-wrap;
     }
     .notice.err{
       border-color: rgba(220,38,38,.25);
       background: rgba(220,38,38,.08);
       color: #7f1d1d;
     }
-    .receiptPaper{
-      margin:12px 0 0;
-      padding:16px;
-      border-radius:14px;
-      border:1px solid var(--border);
-      background:#fff;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-      font-size:14px;
-      line-height:1.55;
-      color:#111827;
+    .notice.ok{
+      border-color: rgba(5,150,105,.25);
+      background: rgba(5,150,105,.10);
+      color: #064e3b;
     }
-    .rp-center{ text-align:center; }
-    .rp-right{ text-align:right; }
-    .rp-row{ display:flex; justify-content:space-between; gap:12px; }
-    .rp-muted{ color: var(--muted); }
-    .rp-sep{ margin:10px 0; border-top:1px dashed var(--border); }
-    .rp-item{ margin:6px 0; }
-    .rp-item .jan{ color: var(--muted); font-size:12px; }
-    .rp-itemLine{ display:flex; justify-content:space-between; gap:12px; }
-    .rp-small{ font-size:12px; }
-    @media (max-width:520px){
-      .field{ min-width:100%; }
-      .btn{ width:100%; }
+
+    .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+    .receipt{
+      border:1px solid var(--border);
+      border-radius:12px;
+      padding:12px;
+      background:#fff;
+      white-space:pre-wrap;
+      line-height:1.5;
+      font-size:13px;
     }
   </style>
 </head>
 <body>
   <div class="wrap">
     <div class="card">
-      <div class="h">
-        <h1>レシート照会</h1>
+      <div class="card-h">
+        <h1>レシート確認</h1>
+        <div class="mono" style="font-size:12px; color:var(--muted);">JST: <span id="nowJst">----</span></div>
       </div>
-      <div class="b">
+      <div class="card-b">
         <div class="row">
           <div class="field">
-            <div class="label">購入日（必須）</div>
-            <input id="date" type="date" />
+            <div class="label">購入日</div>
+            <input id="purchaseDate" type="date" />
           </div>
           <div class="field">
-            <div class="label">レシート番号（必須）</div>
-            <input id="receiptNo" type="text" autocomplete="off" placeholder="決済レシート番号を入力" />
+            <div class="label">レシート番号</div>
+            <input id="receiptNo" type="text" autocomplete="off" placeholder="例: T12345" />
           </div>
-          <button class="btn primary" id="btnSearch" type="button">検索</button>
+          <div style="min-width:180px; display:flex; gap:10px;">
+            <button class="btn primary" id="btnSearch" type="button" style="flex:1;">検索</button>
+          </div>
         </div>
 
-        <div id="notice" class="notice">日付とレシート番号を入力して検索してください。</div>
-    <div id="out" class="receiptPaper" hidden></div>
+        <div id="msg" class="notice">購入日とレシート番号を入力して検索してください。</div>
+      </div>
+    </div>
+
+    <div class="card" id="resultCard" hidden>
+      <div class="card-h">
+        <div style="display:flex; flex-direction:column; gap:2px;">
+          <div style="font-weight:800;">レシート</div>
+          <div class="mono" style="font-size:12px; color:var(--muted);" id="resultMeta">----</div>
+        </div>
+      </div>
+      <div class="card-b">
+        <div class="receipt mono" id="receiptText"></div>
       </div>
     </div>
   </div>
 
   <script>
+    // ★ ここだけ、いまのFunctionsの実装に合わせて調整が必要
+    // 例:
+    //   - /api/receipt?purchase_date=YYYY-MM-DD&receipt_no=XXX
+    //   - /api/transactions/lookup?date=YYYY-MM-DD&receipt=XXX
     const API = {
-      receipt: (date, receiptNo) => `/api/receipt?date=${encodeURIComponent(date)}&receipt_no=${encodeURIComponent(receiptNo)}`
+      lookup: (dateYYYYMMDDorYYYYMMDDash, receiptNo) =>
+        `/api/receipt?purchase_date=${encodeURIComponent(dateYYYYMMDDorYYYYMMDDash)}&receipt_no=${encodeURIComponent(receiptNo)}`
     };
 
-    const elDate = document.getElementById("date");
-    const elReceipt = document.getElementById("receiptNo");
-    const elBtn = document.getElementById("btnSearch");
-    const elNotice = document.getElementById("notice");
-    const elOut = document.getElementById("out");
+    const elNowJst = document.getElementById("nowJst");
+    const elPurchaseDate = document.getElementById("purchaseDate");
+    const elReceiptNo = document.getElementById("receiptNo");
+    const elBtnSearch = document.getElementById("btnSearch");
+    const elMsg = document.getElementById("msg");
+    const elResultCard = document.getElementById("resultCard");
+    const elResultMeta = document.getElementById("resultMeta");
+    const elReceiptText = document.getElementById("receiptText");
 
-    function setNotice(type, text){
-      elNotice.className = "notice" + (type ? ` ${type}` : "");
-      elNotice.textContent = text;
+    const JST_FMT = new Intl.DateTimeFormat("sv-SE", {
+      timeZone: "Asia/Tokyo",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false
+    });
+
+    function formatNowJst(){
+      return JST_FMT.format(new Date());
     }
 
-    function money(n){ return (n ?? 0).toLocaleString("ja-JP"); }
+    function setMsg(type, text){
+      elMsg.className = "notice" + (type ? ` ${type}` : "");
+      elMsg.textContent = text;
+    }
+
+    function escapeText(s){
+      return String(s ?? "");
+    }
+
+    // 既に "YYYY-MM-DD HH:mm:ss"（JST）で保存されている想定なら、そのまま表示するのが一番安全
+    function normalizeRegisteredAtJst(v){
+      if (!v) return "";
+      const s = String(v).trim();
+
+      // もしISO(例: 2026-01-17T08:29:38.000Z)が来ても、Asia/Tokyoに変換して表示
+      if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(s)){
+        const d = new Date(s);
+        if (!isNaN(d.getTime())) return JST_FMT.format(d);
+      }
+
+      // それ以外はそのまま（"YYYY-MM-DD HH:mm:ss" など）
+      return s;
+    }
+
+    async function apiGetJson(url){
+      const res = await fetch(url, { method:"GET", headers:{ "Accept":"application/json" } });
+      const text = await res.text().catch(()=> "");
+      let data = null;
+      try { data = text ? JSON.parse(text) : null; } catch(e) {}
+      if (!res.ok){
+        const msg = (data && data.error) ? data.error : text || `HTTP ${res.status}`;
+        throw new Error(msg);
+      }
+      return data;
+    }
+
+    function buildReceiptText(tx){
+      // 期待するJSON例（あなたの実装に合わせてフィールド名は調整OK）
+      // tx = {
+      //   transaction_id, receipt_no, registered_at_jst,
+      //   subtotal_excl_10, tax_10, subtotal_incl_10,
+      //   subtotal_excl_8, tax_8, subtotal_incl_8,
+      //   total_incl,
+      //   items: [{product_name, qty, price_excl, line_amount_excl, tax_rate}, ...]
+      // }
+      const lines = [];
+      lines.push("購入者控え（簡易レシート）");
+      lines.push(`購入日: ${normalizeRegisteredAtJst(tx.registered_at_jst)} (JST)`);
+      lines.push(`レシート番号: ${escapeText(tx.receipt_no)}`);
+      lines.push(`取引ID: ${escapeText(tx.transaction_id)}`);
+      lines.push("");
+
+      const items = Array.isArray(tx.items) ? tx.items : [];
+      if (items.length > 0){
+        lines.push("明細:");
+        for (const it of items){
+          const name = escapeText(it.product_name);
+          const qty = Number(it.qty || 0);
+          const priceExcl = Number(it.price_excl || 0);
+          const lineExcl = Number(it.line_amount_excl || (priceExcl * qty));
+          const taxRate = Number(it.tax_rate || 0);
+          lines.push(`- ${name}  x${qty}  税抜単価:${priceExcl}  税抜金額:${lineExcl}  税率:${taxRate}%`);
+        }
+        lines.push("");
+      }
+
+      lines.push("小計（税率別）:");
+      lines.push(`10% 税抜:${Number(tx.subtotal_excl_10||0)}  税額:${Number(tx.tax_10||0)}  税込:${Number(tx.subtotal_incl_10||0)}`);
+      lines.push(` 8% 税抜:${Number(tx.subtotal_excl_8||0)}  税額:${Number(tx.tax_8||0)}  税込:${Number(tx.subtotal_incl_8||0)}`);
+      lines.push("");
+      lines.push(`合計（税込）: ${Number(tx.total_incl||0)}`);
+
+      return lines.join("\n");
+    }
 
     async function search(){
-      const date = (elDate.value || "").trim();
-      const receiptNo = (elReceipt.value || "").trim();
-      if (!date || !receiptNo){
-        setNotice("err", "日付とレシート番号は必須です。");
-        elOut.hidden = true;
+      const d = (elPurchaseDate.value || "").trim();
+      const r = (elReceiptNo.value || "").trim();
+      if (!d || !r){
+        setMsg("err", "購入日とレシート番号を入力してください。");
         return;
       }
+
+      elBtnSearch.disabled = true;
+      elBtnSearch.textContent = "検索中...";
+      elResultCard.hidden = true;
+
       try{
-        setNotice("", "検索中...");
-        elOut.hidden = true;
+        const data = await apiGetJson(API.lookup(d, r));
 
-        const res = await fetch(API.receipt(date, receiptNo), { headers:{ "Accept":"application/json" } });
-        const ct = (res.headers.get("content-type") || "").toLowerCase();
-        const text = await res.text().catch(()=> "");
-        let data = null;
-        try{ data = text ? JSON.parse(text) : null; } catch(e) {}
-        if (!res.ok){
-          // Avoid dumping raw HTML (e.g., Cloudflare error pages) into the UI.
-          if (ct.includes("text/html") || /<!doctype\s+html|<html/i.test(text)){
-            throw new Error(`サーバーエラー（HTTP ${res.status}）`);
-          }
-          const msg = (data && data.error) ? data.error : (text || `HTTP ${res.status}`);
-          throw new Error(msg);
-        }
-        if (!data || !data.receipt){
-          throw new Error("レシートデータが見つかりませんでした、購入日とレシート番号を確認してください");
+        // 既存実装に合わせて受け取るキーを調整してください
+        // 例: { transaction: {...} } / { result: {...} } / そのまま {...}
+        const tx = data.transaction || data.result || data;
+
+        if (!tx || !tx.transaction_id){
+          setMsg("err", "見つかりませんでした。入力内容を確認してください。");
+          return;
         }
 
-        const r = data.receipt;
+        setMsg("ok", "見つかりました。");
+        elResultMeta.textContent = `transaction_id: ${escapeText(tx.transaction_id)}`;
+        elReceiptText.textContent = buildReceiptText(tx);
+        elResultCard.hidden = false;
 
-        const parseJst = (s) => {
-          if (!s) return null;
-          // expected: "YYYY-MM-DD HH:mm:ss" (JST)
-          const m = String(s).trim().match(/^\s*(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?/);
-          if (!m) return null;
-          const y = Number(m[1]);
-          const mo = Number(m[2]);
-          const d = Number(m[3]);
-          const hh = Number(m[4]);
-          const mm = Number(m[5]);
-          const ss = Number(m[6] || "0");
-          // convert JST -> UTC
-          return new Date(Date.UTC(y, mo - 1, d, hh - 9, mm, ss));
-        };
-
-        const fmtJst = (dt) => {
-          if (!dt) return "";
-          const parts = new Intl.DateTimeFormat("ja-JP", {
-            timeZone: "Asia/Tokyo",
-            year: "numeric",
-            month: "2-digit",
-            day: "2-digit",
-            weekday: "short",
-            hour: "2-digit",
-            minute: "2-digit",
-            hour12: false,
-          }).formatToParts(dt);
-
-          const get = (t) => (parts.find(p => p.type === t)?.value ?? "");
-          const y = get("year");
-          const mo = get("month");
-          const day = get("day");
-          const wd = get("weekday");
-          const h = get("hour");
-          const mi = get("minute");
-          return `${y}年${mo}月${day}日(${wd}) ${h}:${mi}`;
-        };
-
-        const cutName = (s) => {
-          const str = String(s || "");
-          return Array.from(str).slice(0, 10).join("");
-        };
-
-        const sumQty = (items) => items.reduce((acc, it) => acc + Number(it.qty || 0), 0);
-
-        const dt = (r.registered_at_utc ? new Date(r.registered_at_utc) : parseJst(r.registered_at_jst));
-        const printedAt = fmtJst(dt);
-
-        const storeName = "キャンパスドンキ桃山大店";
-        const tel = "0570-094-911";
-        const openHours = "08:00 - 21:00";
-        const bizNo = "T3011001096370";
-        const storeNo = "722";
-        const slipNo = String(r.receipt_no || "");
-
-        const s8 = (r.tax_summary || []).find(x => Number(x.tax_rate) === 8) || { subtotal_excl:0, tax_amount:0, subtotal_incl:0 };
-        const s10 = (r.tax_summary || []).find(x => Number(x.tax_rate) === 10) || { subtotal_excl:0, tax_amount:0, subtotal_incl:0 };
-
-        const itemRows = (r.items || []).map(it => {
-          const jan = String(it.product_code || "");
-          const name = cutName(it.product_name);
-          const taxRate = Number(it.tax_rate || 0);
-          const qtyRaw = Number(it.qty || 0);
-          const qty = Number.isFinite(qtyRaw) && qtyRaw > 0 ? qtyRaw : 1;
-
-          const priceExcl = Number(it.price_excl || 0);
-          const lineExcl = (it.line_amount_excl != null)
-            ? Number(it.line_amount_excl || 0)
-            : (priceExcl * qty);
-          const lineTax = Math.ceil(lineExcl * taxRate / 100);
-          const lineIncl = lineExcl + lineTax;
-
-          const star = taxRate === 8 ? " *" : "";
-          const qtyText = qty ? ` x${qty}` : "";
-          return `
-            <div class="rp-sep"></div>
-            <div class="rp-row mono">
-              <div class="rp-left">${jan}JAN</div>
-              <div class="rp-right"></div>
-            </div>
-            <div class="rp-row mono">
-              <div class="rp-left">${name}${qtyText}</div>
-              <div class="rp-right">¥${money(lineIncl)}${star}</div>
-            </div>
-          `;
-        }).join("");
-
-        const totalQty = sumQty(r.items || []);
-        const html = `
-          <div class="rp-center mono rp-title">領収書</div>
-          <div class="rp-center mono">株式会社ドン・キホーテ</div>
-          <div class="rp-center mono">本社：東京都目黒区青葉台2-19-10</div>
-
-          <div class="rp-space"></div>
-
-          <div class="rp-row mono">
-            <div class="rp-left">${storeName}</div>
-            <div class="rp-right">TEL${tel}</div>
-          </div>
-          <div class="rp-row mono">
-            <div class="rp-left">営業時間</div>
-            <div class="rp-right">${openHours}</div>
-          </div>
-
-          <div class="rp-space"></div>
-
-          <div class="rp-center mono">${printedAt}</div>
-
-          ${itemRows}
-
-          <div class="rp-space"></div>
-
-          ${Number(s8.subtotal_excl || 0) ? `
-            <div class="rp-row mono"><div class="rp-left">8%対象額</div><div class="rp-right">¥${money(s8.subtotal_excl)}</div></div>
-            <div class="rp-row mono"><div class="rp-left">8%税額</div><div class="rp-right">¥${money(s8.tax_amount)}</div></div>
-          ` : ""}
-
-          ${Number(s10.subtotal_excl || 0) ? `
-            <div class="rp-row mono"><div class="rp-left">10%対象額</div><div class="rp-right">¥${money(s10.subtotal_excl)}</div></div>
-            <div class="rp-row mono"><div class="rp-left">10%税額</div><div class="rp-right">¥${money(s10.tax_amount)}</div></div>
-          ` : ""}
-
-          <div class="rp-row mono"><div class="rp-left">（税額合計</div><div class="rp-right">¥${money(Number(s8.tax_amount||0)+Number(s10.tax_amount||0))}）</div></div>
-          <div class="rp-row mono"><div class="rp-left">合計</div><div class="rp-right">¥${money(r.total_incl)}</div></div>
-
-          <div class="rp-space"></div>
-          <div class="rp-row mono"><div class="rp-left">majica払</div><div class="rp-right">¥${money(r.total_incl)}</div></div>
-
-          <div class="rp-space"></div>
-          <div class="rp-row mono"><div class="rp-left">お買上点数</div><div class="rp-right">${totalQty}点</div></div>
-          <div class="mono rp-note">「*」印は軽減税率（8%）適用商品</div>
-
-          <div class="rp-space"></div>
-          <div class="rp-row mono"><div class="rp-left">事業者登録番号</div><div class="rp-right">${bizNo}</div></div>
-          <div class="rp-row mono"><div class="rp-left">店舗番号</div><div class="rp-right">${storeNo}</div></div>
-          <div class="rp-row mono"><div class="rp-left">伝票番号</div><div class="rp-right">${slipNo}</div></div>
-        `;
-
-        elOut.innerHTML = html;
-        elOut.hidden = false;
-        setNotice("", "見つかりました。");
       } catch(e){
-        setNotice("err", `レシートデータが見つかりませんでした、購入日とレシート番号を確認してください`);
-        elOut.hidden = true;
+        setMsg("err", `検索に失敗しました：${e.message || e}`);
+      } finally {
+        elBtnSearch.disabled = false;
+        elBtnSearch.textContent = "検索";
       }
     }
 
-    elBtn.addEventListener("click", search);
-    elReceipt.addEventListener("keydown", (e) => { if (e.key === "Enter") search(); });
+    elBtnSearch.addEventListener("click", search);
+    elReceiptNo.addEventListener("keydown", (e) => {
+      if (e.key === "Enter"){
+        e.preventDefault();
+        search();
+      }
+    });
 
-    // default date = today (JST)
-    const now = new Date();
-    const parts = new Intl.DateTimeFormat("en-CA", { timeZone:"Asia/Tokyo", year:"numeric", month:"2-digit", day:"2-digit" }).formatToParts(now);
-    const get = (t) => (parts.find(p => p.type === t)?.value ?? "");
-    elDate.value = `${get("year")}-${get("month")}-${get("day")}`;
+    function tick(){
+      elNowJst.textContent = formatNowJst();
+    }
+    tick();
+    setInterval(tick, 1000);
   </script>
 </body>
 </html>
